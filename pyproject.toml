@@ -1,0 +1,175 @@
+[project]
+name = "agentguard"
+dynamic = ["version"]
+description = "Security & quality evaluation framework for AI agents: canary-based red-teaming, statistically rigorous scoring, and self-validating detectors."
+readme = "README.md"
+license = "Apache-2.0"
+license-files = ["LICENSE"]
+requires-python = ">=3.11"
+authors = [{ name = "Piyush Das" }]
+keywords = ["llm", "ai-security", "red-teaming", "evaluation", "agents", "prompt-injection", "owasp"]
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Intended Audience :: Developers",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Security",
+    "Topic :: Software Development :: Testing",
+    "Typing :: Typed",
+]
+dependencies = [
+    "pydantic>=2.9",
+    "pyyaml>=6.0.2",
+    "typer>=0.15",
+    "rich>=13.9",
+    "tenacity>=9.0",
+    "sqlmodel>=0.0.22",
+    "jinja2>=3.1.6",
+    "rank-bm25>=0.2.2",
+    "httpx>=0.28",
+    "jsonpath-ng>=1.7",
+]
+
+[project.optional-dependencies]
+litellm = ["litellm>=1.60"]
+ragas = ["ragas>=0.2"]
+deepeval = ["deepeval>=2.0"]
+presidio = ["presidio-analyzer>=2.2"]
+dashboard = ["fastapi>=0.115", "uvicorn>=0.32"]
+langchain = ["langchain-core>=0.3"]
+mcp = ["mcp>=1.2"]
+otel = ["opentelemetry-sdk>=1.29"]
+all = [
+    "agentguard[litellm,ragas,deepeval,presidio,dashboard,langchain,mcp,otel]",
+]
+
+[project.scripts]
+agentguard = "agentguard.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/PiyushDas-2004/agentguard"
+Issues = "https://github.com/PiyushDas-2004/agentguard/issues"
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3",
+    "pytest-asyncio>=0.25",
+    "pytest-cov>=6.0",
+    "pytest-socket>=0.7",
+    "hypothesis>=6.120",
+    "syrupy>=4.8",
+    "mutmut>=3.2",
+    "ruff>=0.9",
+    "mypy>=1.14",
+    "bandit>=1.8",
+    "pip-audit>=2.7",
+    "detect-secrets>=1.5",
+    "interrogate>=1.7",
+    "jsonschema>=4.23",
+    "junitparser>=3.2",
+    "psutil>=6.1",
+    "types-PyYAML>=6.0",
+    "fastapi>=0.115",
+    "uvicorn>=0.32",
+    "langchain-core>=0.3",
+    "mcp>=1.2",
+    "opentelemetry-sdk>=1.29",
+    "litellm>=1.60",
+]
+
+[build-system]
+requires = ["hatchling>=1.26"]
+build-backend = "hatchling.build"
+
+[tool.hatch.version]
+path = "src/agentguard/version.py"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/agentguard"]
+
+[tool.ruff]
+line-length = 120
+target-version = "py311"
+extend-exclude = ["mutants", "tests/snapshots/__snapshots__"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "S", "C4", "SIM", "RUF", "PT", "ASYNC", "N", "PL"]
+ignore = [
+    "PLR0911", "PLR0912", "PLW2901", "PLR0917", "C416", "SIM105", "PLR0913", "PLR0915", "PLR2004", "PLC0415", "PLW0603",
+    "RUF001", "RUF002", "RUF003",  # homoglyphs / zero-width chars are intentional test data
+    "S101",
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S", "PLR", "N802", "B017", "PT011", "ASYNC"]
+"scripts/**" = ["S", "T20"]
+"examples/**" = ["S"]
+# Regex-grammar modules: long patterns are clearer unwrapped.
+"src/agentguard/llm/intents.py" = ["E501", "S105"]
+"src/agentguard/detectors/dangerous_output.py" = ["E501"]
+"examples/targets/defenses.py" = ["E501", "RUF001"]
+
+[tool.ruff.format]
+quote-style = "double"
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+plugins = ["pydantic.mypy"]
+warn_unused_ignores = true
+mypy_path = "src"
+
+[[tool.mypy.overrides]]
+module = ["rank_bm25.*", "jsonpath_ng.*", "litellm.*", "ragas.*", "deepeval.*", "presidio_analyzer.*", "datasets.*"]
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+minversion = "8.0"
+testpaths = ["tests"]
+addopts = "-ra --strict-markers"
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+markers = [
+    "live: tests that call real LLM providers (skipped without API keys)",
+    "slow: slower integration tests",
+]
+filterwarnings = [
+    "ignore::DeprecationWarning:litellm.*",
+    "ignore::DeprecationWarning:pydantic.*",
+]
+
+[tool.coverage.run]
+source = ["agentguard"]
+branch = true
+omit = ["*/agentguard/__main__.py"]
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = true
+exclude_lines = [
+    "pragma: no cover",
+    "if TYPE_CHECKING:",
+    "raise AssertionError",
+    "if __name__ == .__main__.:",
+    "@overload",
+]
+
+[tool.bandit]
+exclude_dirs = ["tests", "mutants"]
+
+[tool.interrogate]
+ignore-init-method = true
+ignore-init-module = true
+ignore-magic = true
+ignore-private = true
+ignore-semiprivate = true
+ignore-nested-functions = true
+fail-under = 90
+exclude = ["tests", "mutants", "scripts", "docs"]
+verbose = 1
+
+[tool.mutmut]
+paths_to_mutate = ["src/agentguard/scoring/", "src/agentguard/detectors/"]
+tests_dir = ["tests/unit/"]
+also_copy = ["datasets/", "examples/"]
