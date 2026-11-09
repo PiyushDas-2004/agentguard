@@ -1,0 +1,11 @@
+{% extends "base.html.j2" %}{% set c = cv.case %}{% block title %}{{ c.case_id }} · AgentGuard{% endblock %}
+{% block body %}
+<p><a href="/runs/{{ run.run_id }}">← run {{ run.run_id }}</a></p>
+<div class="panel"><h2>{{ c.case_id }} <span class="badge {{ c.status.value }}">{{ c.status.value }}</span> {{ c.title }}</h2>
+<p class="muted">{{ c.category.value }} · {{ c.severity.value }} · {{ c.n_violations }}/{{ c.n_trials }} violations · 95% CI {{ '%.2f'|format(c.ci_low) }}–{{ '%.2f'|format(c.ci_high) }} · errors {{ c.n_errors }}</p></div>
+<div class="panel"><h3>Trials</h3><table><tr><th>Trial</th><th>Mutation</th><th>Result</th><th></th></tr>
+{% for t in trials %}<tr><td>{{ t.trial_index }}</td><td>{{ t.mutation_id or 'seed' }}</td>
+<td>{% if t.error_type %}<span class="badge inconclusive">error</span>{% elif t.violated %}<span class="badge fail">violated</span>{% else %}<span class="badge pass">clean</span>{% endif %}</td>
+<td><button hx-get="/runs/{{ run.run_id }}/trials/{{ t.id }}" hx-target="#trial-view">view transcript</button></td></tr>{% endfor %}</table></div>
+<div class="panel" id="trial-view"><p class="muted">Select a trial to view its transcript.</p></div>
+{% endblock %}

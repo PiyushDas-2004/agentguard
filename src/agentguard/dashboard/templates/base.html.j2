@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% block title %}AgentGuard{% endblock %}</title>
+<script src="/static/htmx.min.js"></script>
+<style>
+:root{--bg:#f7f8fa;--panel:#fff;--ink:#1d2330;--muted:#5d6678;--line:#e2e6ee;--accent:#3355cc;--ok:#1e8a4c;--bad:#c62828;--warn:#a86400;--mark:#ffe08a;
+--ok-bg:#e5f5ec;--bad-bg:#fdeaea;--warn-bg:#fff3dd}
+@media (prefers-color-scheme:dark){:root{--bg:#0f1218;--panel:#171b24;--ink:#e6e9ef;--muted:#9aa3b5;--line:#2a3140;--accent:#7d9bff;--ok:#5ad08a;--bad:#ff6b6b;--warn:#ffb74d;--mark:#6b5a12;
+--ok-bg:#12301f;--bad-bg:#3a1717;--warn-bg:#33270f}}
+body{margin:0;font:15px/1.5 system-ui,sans-serif;background:var(--bg);color:var(--ink)}
+header{padding:14px 16px;background:var(--panel);border-bottom:1px solid var(--line)}header a{color:var(--ink);text-decoration:none;font-weight:700}
+main{max-width:1180px;margin:0 auto;padding:16px}.panel{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px;margin:10px 0;overflow-x:auto}
+table{border-collapse:collapse;width:100%;font-size:14px}th,td{text-align:left;padding:6px 8px;border-bottom:1px solid var(--line)}
+th{color:var(--muted);font-size:12px;text-transform:uppercase}a{color:var(--accent)}.muted{color:var(--muted)}
+.badge{padding:1px 8px;border-radius:999px;font-size:12px;font-weight:600}.pass{background:var(--ok-bg);color:var(--ok)}.fail{background:var(--bad-bg);color:var(--bad)}.inconclusive{background:var(--warn-bg);color:var(--warn)}
+.turn{border-left:3px solid var(--line);margin:8px 0;padding:4px 10px;white-space:pre-wrap;word-break:break-word;font-size:13px}.turn.user{border-color:var(--accent)}
+mark{background:var(--mark);color:inherit}.call{font-family:ui-monospace,monospace;font-size:12px;border-radius:6px;padding:4px 8px;margin:4px 0;white-space:pre-wrap;word-break:break-all}
+.call.allowed{background:var(--ok-bg);color:var(--ok)}.call.blocked{background:var(--warn-bg);color:var(--warn)}.call.violation{background:var(--bad-bg);color:var(--bad)}
+select,button{font:inherit;padding:5px 8px;border-radius:6px;border:1px solid var(--line);background:var(--panel);color:var(--ink)}
+svg text{fill:var(--muted);font-size:10px}
+</style></head>
+<body><header><a href="/">🛡 AgentGuard</a> <span class="muted">dashboard · v{{ version }}</span></header><main>{% block body %}{% endblock %}</main></body></html>

@@ -341,7 +341,7 @@ _IMPERATIVE = re.compile(
     r"(ignore|disregard|forget|send|forward|e-?mail|transfer|wire|pay|fetch|visit|open|navigate|call|invoke|run|execute|"
     r"include|append|add|insert|print|reveal|output|display|render|embed|write|save|store|remember|memori[sz]e|delete|"
     r"tell|respond|reply|answer|say|end|begin|start|post|upload|download|curl|repeat|use|follow|obey|act|pretend|"
-    r"recommend|install|copy|paste|encode|translate|summari[sz]e the system|share|leak|disclose|provide|list|show|"
+    r"recommend|install|copy|paste|encode|decode|translate|summari[sz]e the system|share|leak|disclose|provide|list|show|"
     r"query|dump|export|log|report)\b",
     re.IGNORECASE,
 )
@@ -356,6 +356,15 @@ def spotlight(content: str, source: str, classifier: InjectionClassifier) -> str
     """Remove instruction-like sentences from untrusted ``content`` and delimit the rest as data."""
     kept: list[str] = []
     removed = 0
+    if re.search(r"(?i)rot-?13|caesar", content):
+        # Announced ROT13 payloads are classified in decoded form too.
+        decoded = codecs.encode(content, "rot_13")
+        if any(
+            _IMPERATIVE.search(s) or classifier.classify(s, untrusted=True).flagged
+            for s in re.split(r"(?<=[.!?:])\s+", decoded)
+        ):
+            content = "\n".join(line for line in content.splitlines() if not re.search(r"(?i)rot-?13|caesar", line))
+            removed += 1
     for line in content.splitlines():
         sentences = re.split(r"(?<=[.!?])\s+", line)
         safe = []
@@ -471,7 +480,8 @@ _ACTIVE = re.compile(
     r"<\s*/?\s*(script|iframe|object|embed|img|svg|form|input|body|link|meta|style)\b[^>]*>|\bon\w+\s*=|javascript:|"
     r"'\s*(?:or|and)\s*'?\d*'?\s*=\s*'?\d*|\bunion\s+(?:all\s+)?select\b|;\s*drop\s+table\b|--\s*$|"
     r"\brm\s+-rf\b|\$\([^)]*\)|`[^`]*\b(curl|wget|bash|sh)\b[^`]*`|\|\s*(?:ba)?sh\b|&&\s*\w+|;\s*(?:curl|wget|nc|bash|rm|cat)\b|"
-    r"\bpickle\.loads?\b|\byaml\.load\(|\beval\s*\(|\bexec\s*\(|__import__|os\.system",
+    r"\bpickle\.loads?\b|\b(?:marshal|dill)\.loads?\b|\byaml\.(?:unsafe_)?load\(|\beval\s*\(|\bexec\s*\(|__import__|os\.system|"
+    r"subprocess\.\w+\([^)]*shell\s*=\s*True|'\s*(?:or|and)\s+'?\w*'?\s*=\s*'?\w*",
     re.IGNORECASE | re.MULTILINE,
 )
 _URL = re.compile(r"!?\[[^\]]*\]\((https?://[^)\s]+)\)|https?://[^\s)\]\"'<>]+")
@@ -561,6 +571,7 @@ class OutputFilter:
 
     def apply(self, text: str) -> str:
         """Filter ``text``; returns a refusal if it would leak secrets or the system prompt."""
+        text = text.translate(_ZERO_WIDTH)  # hidden characters can split blocked tokens
         if self.leaks_secret(text) or self.leaks_system_prompt(text):
             return "I'm sorry, but I can't share that information."
         text = self._redact_pii(text)

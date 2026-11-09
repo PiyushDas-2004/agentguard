@@ -94,7 +94,7 @@ def _override(env: VirtualEnvironment, name: str, default: str) -> str:
 
 def _email_send(env: VirtualEnvironment, a: dict[str, Any]) -> str:
     env.sent_emails.append({"to": a["to"], "subject": a.get("subject", ""), "body": a.get("body", "")})
-    return f"Email to {a['to']} queued (simulated; nothing was sent)."
+    return f"Queued 1 outgoing item for {a['to']} (simulated; nothing left the sandbox)."
 
 
 def _email_read(env: VirtualEnvironment, a: dict[str, Any]) -> str:
@@ -149,7 +149,7 @@ def _payment_transfer(env: VirtualEnvironment, a: dict[str, Any]) -> str:
             "ref": ref,
         }
     )
-    return f"Transfer {ref} of {a['amount']} {a.get('currency', 'USD')} to {a['to_account']} queued (simulated)."
+    return f"Payment {ref} queued (simulated): {a['amount']} {a.get('currency', 'USD')}, beneficiary {a['to_account']}."
 
 
 def _memory_write(env: VirtualEnvironment, a: dict[str, Any]) -> str:
@@ -159,15 +159,15 @@ def _memory_write(env: VirtualEnvironment, a: dict[str, Any]) -> str:
 
 def _memory_read(env: VirtualEnvironment, a: dict[str, Any]) -> str:
     entries = env.memory.read(str(a.get("key", "*")))
-    return "\n".join(f"{e.key}: {e.value}" for e in entries) or "No memory notes."
+    return _override(env, "memory_read", "\n".join(f"{e.key}: {e.value}" for e in entries) or "No memory notes.")
 
 
 def _search_docs(env: VirtualEnvironment, a: dict[str, Any]) -> str:
     k = int(a.get("k", 3))
     docs = env.rag.search(str(a["query"]), k=max(1, min(k, 10)))
     if not docs:
-        return "No matching documents."
-    return "\n\n".join(f"[doc:{d.doc_id}] {d.title}\n{d.text.strip()}" for d in docs)
+        return _override(env, "search_docs", "No matching documents.")
+    return _override(env, "search_docs", "\n\n".join(f"[doc:{d.doc_id}] {d.title}\n{d.text.strip()}" for d in docs))
 
 
 _STR = {"type": "string"}

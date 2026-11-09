@@ -30,6 +30,9 @@ class SuccessCheck(_Strict):
 
     type: Literal["output_contains", "output_regex", "tool_called", "judge"]
     value: str = ""
+    tool: str | None = None
+    args: dict[str, str] = Field(default_factory=dict)
+    rubric: Literal["task_success"] = "task_success"
 
 
 class QualityTask(_Strict):

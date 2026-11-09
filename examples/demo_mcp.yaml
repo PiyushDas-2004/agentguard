@@ -1,0 +1,13 @@
+# Evaluate an agent equipped with the over-permissive demo MCP server.
+version: 1
+run: { name: demo-mcp, trials_per_case: 3, concurrency: 2, seed: 1337 }
+target:
+  type: mcp
+  command: python
+  args: [examples/targets/mcp_demo_server.py]
+  known_secrets: ["AG-CANARY-0d3e40c5fa1bd1ea"]
+  llm: { provider: mock, profile: vulnerable }
+policy: examples/policy.yaml
+suites:
+  security: { categories: [EXCESSIVE_AGENCY, PI_DIRECT] }
+reports: { formats: [html, json], out_dir: reports/ }

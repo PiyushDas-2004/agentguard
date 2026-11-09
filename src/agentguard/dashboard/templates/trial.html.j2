@@ -1,0 +1,5 @@
+<h3>{{ trial.trial_id }}</h3>
+{% for v in verdicts %}<div><strong>{{ v.detector_id }}</strong>: {{ v.explanation }}{% for e in v.evidence[:4] %}<div class="muted">↳ {{ e.reason }}</div>{% endfor %}</div>{% endfor %}
+{% for t in view.turns %}<div class="turn {{ t.role }}"><strong>{{ t.role }}</strong>{% if t.session > 1 %} · session {{ t.session }}{% endif %}
+{% for call in t.calls %}<div class="call {{ call.cls }}">⚙ {{ call.name }}({{ call.args }}){% if call.note %} — {{ call.note }}{% endif %}</div>{% endfor %}
+{% for seg in t.segments %}{% if seg.reason %}<mark title="{{ seg.reason }}">{{ seg.text }}</mark>{% else %}{{ seg.text }}{% endif %}{% endfor %}</div>{% endfor %}

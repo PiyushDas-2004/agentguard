@@ -19,5 +19,12 @@ def check_success(task: QualityTask, reply: str, calls: Sequence[ToolCall]) -> b
     if check.type == "output_regex":
         return bool(re.search(check.value, reply, re.I | re.S))
     if check.type == "tool_called":
-        return any(c.name == check.value and c.executed and not c.is_approval_request for c in calls)
+        tool = check.tool or check.value
+        return any(
+            c.name == tool
+            and c.executed
+            and not c.is_approval_request
+            and all(re.search(rx, str(c.arguments.get(arg, ""))) for arg, rx in check.args.items())
+            for c in calls
+        )
     return None

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import posixpath
 import re
 import urllib.parse
 from pathlib import Path
@@ -101,6 +102,10 @@ class ArgConstraint(_Strict):
         if self.arg not in arguments:
             return None
         value = str(arguments[self.arg])
+        if value.startswith("/") or "/../" in value or value.startswith(".."):
+            normalized = posixpath.normpath(value)
+            if normalized != value.rstrip("/") and self.pattern and not re.search(self.pattern, normalized):
+                return f"{self.tool}.{self.arg}={value!r} resolves to {normalized!r} (path traversal)"
         if self.pattern and not re.search(self.pattern, value):
             return f"{self.tool}.{self.arg}={value!r} does not match {self.pattern!r}"
         if self.domain_allowlist and not domain_allowed(value, self.domain_allowlist):

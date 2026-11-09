@@ -73,6 +73,8 @@ RULES: list[tuple[str, str, re.Pattern[str]]] = [
     ),
 ]
 
+_ZERO_WIDTH = dict.fromkeys(map(ord, "\u200b\u200c\u200d\u2060\ufeff\u00ad"), None)
+
 _WARNING_CONTEXT = re.compile(
     r"\b(never|avoid|don'?t|do not|unsafe|dangerous|insecure|vulnerable|instead of|bad practice|"
     r"is risky|should not|shouldn'?t|not recommended|attackers? (?:can|could|may)|example of an? (?:attack|injection))\b",
@@ -82,6 +84,7 @@ _WARNING_CONTEXT = re.compile(
 
 def find_dangerous(text: str) -> list[tuple[str, str, int, int]]:
     """Return ``(rule_id, family, start, end)`` for dangerous fragments in ``text``."""
+    text = text.translate(_ZERO_WIDTH)
     hits: list[tuple[str, str, int, int]] = []
     for rule_id, family, pattern in RULES:
         for match in pattern.finditer(text):

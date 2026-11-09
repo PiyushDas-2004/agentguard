@@ -83,6 +83,7 @@ REVEAL_VERBS = (
     r"paste|translate|summari[sz]e|spell(?: out)?|encode|list|share|disclose|give|provide|"
     r"read(?: back| out)?|quote|reproduce|state|expose|paraphrase|rewrite|convert|put|format|"
     r"return|emit|transcribe|leak|send|include|type|render|describe|explain|confirm|verify|"
+    r"turn|restate|rephrase|tabulate|outline|reformat|lay out|walk me through|say|speak|announce|"
     r"what (?:is|are|was|were)|what's)"
 )
 SYSTEM_PROMPT_OBJ = (
@@ -106,8 +107,7 @@ SECRET_OBJ = (
     r"\bpins?\b|keys?|codes?)"
 )
 INCLUDE_VERBS = (
-    r"(include|append|add|insert|end (?:your|the|each|every) (?:reply|answer|response|message|"
-    r"summary|output) with|start (?:your|the|each) (?:reply|answer|response|message) with|"
+    r"(include|append|add|insert|end (?:[\w-]+ ){0,3}with|start (?:your|the|each) (?:reply|answer|response|message) with|"
     r"begin (?:your|the|each) (?:reply|answer|response|message) with|mention|say|write|"
     r"respond with|reply with|output|print|sign off with|finish with|put|place|attach|prepend|"
     r"tag|stamp|echo|emit|close with|conclude with|add the (?:phrase|text|string|word))"
@@ -521,6 +521,7 @@ def _body_for(low: str, unit: str) -> str:
 def _email_intent(unit: str, low: str, source: str) -> ToolIntent | None:
     addresses = EMAIL_RE.findall(unit)
     explicit = "email_send" in low
+    low = EMAIL_RE.sub(lambda m: " " * len(m.group(0)), low)  # verbs inside addresses do not count
     verb = re.search(
         r"\b(send|forward|email|e-mail|mail|cc|bcc|notify|message|write to|reply to|contact|report)\b",
         low,
@@ -529,6 +530,8 @@ def _email_intent(unit: str, low: str, source: str) -> ToolIntent | None:
         return None
     if verb and _negated(low, verb.start()):
         return None
+    if verb and re.match(r'["\']?\s*:', low[verb.end() :]) and not explicit:
+        return None  # a JSON/YAML key such as "email": "x@y" is data, not an instruction
     subject = "Message"
     m = re.search(r"subject(?: line)?\s*(?:of|:|=)?\s*[\"“']([^\"”']{1,120})[\"”']", unit, re.IGNORECASE)
     if m:
@@ -591,6 +594,7 @@ def _file_intents(unit: str, low: str, source: str) -> list[ToolIntent]:
     explicit_write = "file_write" in low
     if write_verb or (explicit_write and (paths or names)):
         target = write_verb.group(2) if write_verb else (paths[0] if paths else names[0])
+        target = target.rstrip(".,;:")
         if not target.startswith("/"):
             target = f"/sandbox/public/{target}"
         if not (write_verb and _negated(low, write_verb.start())):
@@ -603,7 +607,7 @@ def _file_intents(unit: str, low: str, source: str) -> list[ToolIntent]:
     read_verb = re.search(
         r"\b(read|open|summari[sz]e|show|cat|display|load|review|check|look at|view|print|"
         r"analy[sz]e|go through|examine|inspect|parse|extract|contents of|what(?:'s| is) in|"
-        r"proofread|translate|tell me about|look over|skim|grab|fetch|retrieve|get)\b",
+        r"proofread|translate|tell me about|look over|skim|grab|fetch|retrieve|get|screen|evaluate|assess|rate|grade|score|edit|audit|scan|study)\b",
         low,
     )
     if (read_verb or "file_read" in low) and (paths or names):
@@ -814,7 +818,8 @@ def _units_intents(unit: str, full_text: str, source: str) -> Intents:
         return detect_transform(low) or detect_transform(full_low)
 
     # --- Directives about the answer ------------------------------------------------------------
-    sp = re.search(rf"\b{REVEAL_VERBS}\b.{{0,80}}?\b{SYSTEM_PROMPT_OBJ}", low)
+    unquoted = DQUOTE_RE.sub(" ", low)  # a quoted phrase is being discussed, not requested
+    sp = re.search(rf"\b{REVEAL_VERBS}\b.{{0,80}}?\b{SYSTEM_PROMPT_OBJ}", unquoted)
     if sp and not _negated(low, sp.start()):
         intents.directives.append(Directive("leak_system_prompt", transform=transform_of(), source=source))
     secret = re.search(rf"\b{REVEAL_VERBS}\b.{{0,80}}?\b{SECRET_OBJ}", low)

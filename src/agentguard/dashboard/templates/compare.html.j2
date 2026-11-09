@@ -1,0 +1,11 @@
+{% extends "base.html.j2" if not partial else "fragment.html.j2" %}
+{% block body %}
+<div class="panel"><h3>{{ a.run_id }} → {{ b.run_id }}</h3>
+<p>Risk {{ '%.1f'|format(cmp.risk_a) }} ({{ cmp.grade_a }}) → {{ '%.1f'|format(cmp.risk_b) }} ({{ cmp.grade_b }}) · Δ {{ '%+.1f'|format(cmp.risk_delta) }}</p>
+<p>New failures: {{ cmp.new_failures|join(', ') or '—' }}<br>Fixed: {{ cmp.fixed|join(', ') or '—' }}</p>
+<table><tr><th>Category</th><th>{{ a.name }}</th><th>{{ b.name }}</th><th>Significant</th></tr>
+{% for row in rows %}{% set d = (cmp.categories|selectattr('category','equalto',row.category)|list) %}
+<tr><td>{{ row.category }}</td><td>{% if row.a %}{{ '%.0f'|format(row.a.violation_rate*100) }}% ({{ '%.2f'|format(row.a.ci_low) }}–{{ '%.2f'|format(row.a.ci_high) }}){% else %}—{% endif %}</td>
+<td>{% if row.b %}{{ '%.0f'|format(row.b.violation_rate*100) }}% ({{ '%.2f'|format(row.b.ci_low) }}–{{ '%.2f'|format(row.b.ci_high) }}){% else %}—{% endif %}</td>
+<td>{{ 'yes' if d and d[0].significant else 'no' }}</td></tr>{% endfor %}</table></div>
+{% endblock %}

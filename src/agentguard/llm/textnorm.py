@@ -97,6 +97,8 @@ def deleet(text: str) -> str:
 
     def fix(match: re.Match[str]) -> str:
         word = match.group(0)
+        if "@" in word.strip("@"):
+            return word  # e-mail address
         has_alpha = any(c.isalpha() for c in word)
         has_leet = any(c in LEET_DECODE for c in word)
         if not (has_alpha and has_leet):
