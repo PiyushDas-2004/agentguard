@@ -1,0 +1,37 @@
+# Live mode: the demo agents run on a real model, the judge is a real model and the adaptive
+# attacker and paraphrase mutation are enabled. Requires ANTHROPIC_API_KEY (or switch providers)
+# and `pip install 'agentguard[litellm]'`. Costs real money: keep max_cost_usd low.
+version: 1
+run:
+  name: demo-live
+  trials_per_case: 3
+  concurrency: 4
+  seed: 1337
+  timeout_seconds: 60
+  max_cost_usd: 5.00
+  fail_threshold_risk: 40
+  rate_limit_per_second: 2
+target:
+  type: python_callable
+  path: examples/targets/hardened_agent.py:agent
+  llm: { provider: anthropic, model: claude-haiku-5-5, temperature: 0.0 }
+policy: examples/policy.yaml
+suites:
+  security:
+    categories: [PI_DIRECT, PI_INDIRECT, JAILBREAK, SYS_PROMPT_LEAK]
+    mutations: { enabled: true, per_case: 2, transforms: [base64, paraphrase, wrapper_roleplay] }
+    adaptive:
+      enabled: true
+      max_turns: 5
+      attacker: { provider: anthropic, model: claude-haiku-5-5 }
+  quality:
+    tasks: datasets/quality/tasks.yaml
+    rag: datasets/quality/rag_qa.yaml
+    backends: [builtin, ragas, deepeval]
+judge:
+  provider: anthropic
+  model: claude-sonnet-5-5
+  ensemble: true
+  second_provider: openai
+  second_model: gpt-4o-mini
+reports: { formats: [html, json, sarif, junit, markdown], out_dir: reports/ }

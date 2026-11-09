@@ -20,6 +20,7 @@ from agentguard.attacks.mutations import mutate_case
 from agentguard.config.policy import Policy
 from agentguard.core.errors import (
     AgentGuardError,
+    BudgetExceededError,
     TargetError,
     TargetTimeoutError,
     error_info_from_exception,
@@ -240,6 +241,46 @@ class ConversationDriver:
         inner: BaseLLM = self.llm_factory(seed)
         return MeteredLLM(inner, self.budget, component="target")
 
+    def prepare(
+        self,
+        case: AttackCase,
+        *,
+        run_id: str,
+        trial_index: int,
+        seed: int,
+        mutation_id: str | None = None,
+        transform: str | None = None,
+    ) -> tuple[TrialRun, TargetContext]:
+        """Build the world (canaries, env, poison, mutation) and an empty trial."""
+        env, canaries, variables, system_prompt, context = self.build_world(
+            case, run_id=run_id, trial_index=trial_index, seed=seed, mutation_id=mutation_id, apply_poison=False
+        )
+        if transform is not None:
+            case = mutate_case(case, transform, derive_seed(seed, "mutation", transform), variables)
+        if case.poison is not None:
+            self._apply_poison(case, env, context, variables)
+            context.rag = env.rag
+        context.llm = self.make_llm(seed)
+        sandbox = ToolSandbox(env, self.policy, approver=self.approver)
+        trial = Trial(run_id=run_id, case_id=case.id, trial_index=trial_index, seed=seed, mutation_id=mutation_id)
+        trial.transcript = Transcript(model=context.llm.model_name if context.llm else None)
+        run = TrialRun(trial, case, env, canaries, sandbox, system_prompt, variables)
+        return run, context
+
+    def finalize(self, run: TrialRun, sessions: list[int], started: float) -> TrialRun:
+        """Stamp timing and copy recorded tool calls into the transcript."""
+        run.wall_time_s = time.perf_counter() - started
+        run.trial.ended_at = utcnow()
+        run.trial.transcript.tool_calls = list(run.sandbox.calls)
+        run.trial.transcript.metadata.update(
+            {
+                "wall_time_s": round(run.wall_time_s, 6),
+                "sessions": sorted(sessions) or [1],
+                "output_truncated": run.output_truncated,
+            }
+        )
+        return run
+
     async def run_trial(
         self,
         case: AttackCase,
@@ -249,67 +290,28 @@ class ConversationDriver:
         seed: int,
         mutation_id: str | None = None,
         transform: str | None = None,
-        user_turn_override: list[str] | None = None,
     ) -> TrialRun:
         """Run every session/turn of ``case`` and return the :class:`TrialRun`.
 
         Target failures are captured in ``trial.error``; ``BudgetExceededError``,
         ``KeyboardInterrupt`` and cancellation propagate.
         """
-        env, canaries, variables, system_prompt, context = self.build_world(
-            case,
-            run_id=run_id,
-            trial_index=trial_index,
-            seed=seed,
-            mutation_id=mutation_id,
-            apply_poison=False,
+        run, context = self.prepare(
+            case, run_id=run_id, trial_index=trial_index, seed=seed, mutation_id=mutation_id, transform=transform
         )
-        if transform is not None:
-            case = mutate_case(case, transform, derive_seed(seed, "mutation", transform), variables)
-        if case.poison is not None:
-            self._apply_poison(case, env, context, variables)
-            context.rag = env.rag
-        context.llm = self.make_llm(seed)
-        sandbox = ToolSandbox(env, self.policy, approver=self.approver)
-        trial = Trial(
-            run_id=run_id,
-            case_id=case.id,
-            trial_index=trial_index,
-            seed=seed,
-            mutation_id=mutation_id,
-        )
-        transcript = Transcript(model=context.llm.model_name if context.llm else None)
-        trial.transcript = transcript
-        run = TrialRun(trial, case, env, canaries, sandbox, system_prompt, variables)
         started = time.perf_counter()
-        turns = [(t.session, render_template(t.content, variables)) for t in case.turns if t.role == "user"]
-        if user_turn_override is not None:
-            turns = [(1, text) for text in user_turn_override]
-        session_conversations: dict[int, list[LLMMessage]] = {}
+        turns = [(t.session, render_template(t.content, run.variables)) for t in run.case.turns if t.role == "user"]
+        conversations: dict[int, list[LLMMessage]] = {}
         try:
             for session, text in turns:
-                await self.step(run, context, session_conversations, session, text)
-        except AgentGuardError as exc:
-            from agentguard.core.errors import BudgetExceededError
-
-            if isinstance(exc, BudgetExceededError):
-                raise
-            trial.error = error_info_from_exception(exc)
+                await self.step(run, context, conversations, session, text)
+        except BudgetExceededError:
+            raise
         except (asyncio.CancelledError, KeyboardInterrupt):
             raise
         except Exception as exc:
-            trial.error = error_info_from_exception(exc)
-        run.wall_time_s = time.perf_counter() - started
-        trial.ended_at = utcnow()
-        trial.transcript.tool_calls = list(sandbox.calls)
-        trial.transcript.metadata.update(
-            {
-                "wall_time_s": round(run.wall_time_s, 6),
-                "sessions": sorted(session_conversations) or [1],
-                "output_truncated": run.output_truncated,
-            }
-        )
-        return run
+            run.trial.error = error_info_from_exception(exc)
+        return self.finalize(run, list(conversations), started)
 
     async def step(
         self,

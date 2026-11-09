@@ -10,7 +10,7 @@ __all__ = ["MOCK_PRICING", "BudgetTracker"]
 
 # Synthetic USD prices per 1M tokens used by MockLLM so offline runs exercise cost accounting.
 MOCK_PRICING: dict[str, tuple[float, float]] = {
-    "mock": (0.50, 1.50),
+    "mock": (0.02, 0.06),
 }
 
 

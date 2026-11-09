@@ -1,0 +1,130 @@
+# RAG question answering over datasets/rag_corpus/clean (see docs/DATASET_AUTHORING.md section 8).
+questions:
+  - id: RQ-001
+    question: "How many business days does it take to process a refund?"
+    reference_answer: "Refunds are processed within 5 business days after the returned item arrives at the fulfillment center."
+    relevant_docs: [refund-policy, returns-process]
+  - id: RQ-002
+    question: "Is there a restocking fee for opened electronics?"
+    reference_answer: "Yes, opened electronics such as the USB-C dock, 4K monitor and headset carry a 15% restocking fee."
+    relevant_docs: [refund-policy]
+  - id: RQ-003
+    question: "How long does standard shipping take and when is it free?"
+    reference_answer: "Standard shipping takes 3 to 5 business days and is free for orders over $100."
+    relevant_docs: [shipping-policy]
+  - id: RQ-004
+    question: "How long is the warranty on a standing desk frame?"
+    reference_answer: "Standing desks have a 5-year warranty on the frame and lift motors (2 years on the desktop surface)."
+    relevant_docs: [warranty]
+  - id: RQ-005
+    question: "How long do customers have to drop off a return package after getting an RMA number?"
+    reference_answer: "Customers have 14 days from the RMA date to drop off the package with the carrier."
+    relevant_docs: [returns-process]
+  - id: RQ-006
+    question: "How often do Acme ID passwords expire and how long must they be?"
+    reference_answer: "Passwords expire every 90 days and must be at least 14 characters long."
+    relevant_docs: [password-reset]
+  - id: RQ-007
+    question: "How long does an SSO session last before I have to sign in again?"
+    reference_answer: "An SSO session lasts 12 hours (only 1 hour on unmanaged devices)."
+    relevant_docs: [sso-login]
+  - id: RQ-008
+    question: "Does the TunnelGate VPN allow split tunneling?"
+    reference_answer: "No, split tunneling is disabled, so all traffic goes through the corporate network while the VPN is connected."
+    relevant_docs: [vpn-access]
+  - id: RQ-009
+    question: "Above what amount do expenses need an itemized receipt?"
+    reference_answer: "Itemized receipts are required for every expense of $25 or more."
+    relevant_docs: [expense-policy]
+  - id: RQ-010
+    question: "What is the nightly hotel cap for business travel in London?"
+    reference_answer: "London is a high-cost city, so the hotel cap is $325 per night instead of the standard $250."
+    relevant_docs: [travel-policy]
+  - id: RQ-011
+    question: "How many unused PTO days carry over into the next year?"
+    reference_answer: "Up to 5 unused PTO days carry over, and they expire on March 31 if not used."
+    relevant_docs: [pto-policy]
+  - id: RQ-012
+    question: "How quickly is the status page updated during a SEV1 incident?"
+    reference_answer: "For SEV1 incidents the status page is updated within 15 minutes of detection and then every 30 minutes."
+    relevant_docs: [incident-reporting]
+  - id: RQ-013
+    question: "How long are customer support tickets retained?"
+    reference_answer: "Customer support tickets are retained for 3 years after the ticket is closed."
+    relevant_docs: [data-retention]
+  - id: RQ-014
+    question: "How much does the Team plan cost per month and how many users does it include?"
+    reference_answer: "The Team plan costs $99 per month and includes up to 25 users."
+    relevant_docs: [pricing-plans]
+  - id: RQ-015
+    question: "What service credit applies when monthly uptime drops below 99.0%?"
+    reference_answer: "Uptime below 99.0% earns a service credit of 25% of that month's subscription fee."
+    relevant_docs: [sla]
+  - id: RQ-016
+    question: "What are the standard customer support hours?"
+    reference_answer: "Standard support hours are Monday to Friday, 8:00 am to 8:00 pm Eastern time."
+    relevant_docs: [support-hours]
+  - id: RQ-017
+    question: "What is the API rate limit per minute on the Business plan?"
+    reference_answer: "The Business plan allows 1,200 API requests per minute."
+    relevant_docs: [api-rate-limits]
+  - id: RQ-018
+    question: "When does IT ship a laptop to a new hire before their start date?"
+    reference_answer: "IT ships each new hire's laptop 5 business days before the start date."
+    relevant_docs: [employee-onboarding]
+  - id: RQ-019
+    question: "What is the annual limit on gifts from vendors under the code of conduct?"
+    reference_answer: "Gifts and hospitality from vendors or customers are limited to $100 per person per year, and cash gifts are never accepted."
+    relevant_docs: [code-of-conduct]
+  - id: RQ-020
+    question: "How much is the home office stipend for remote employees?"
+    reference_answer: "Remote and hybrid employees get a one-time $500 home office stipend plus a $50 monthly internet allowance."
+    relevant_docs: [remote-work]
+  - id: RQ-021
+    question: "How soon after release must critical security updates be installed on laptops?"
+    reference_answer: "Critical security updates are installed within 72 hours; other OS updates within 14 days."
+    relevant_docs: [laptop-setup]
+  - id: RQ-022
+    question: "Where is the Acme headquarters office located?"
+    reference_answer: "Acme headquarters is in Austin, Texas, at 412 Congress Avenue."
+    relevant_docs: [office-locations]
+  - id: RQ-023
+    question: "How many paid company holidays does Acme observe in the United States?"
+    reference_answer: "Acme observes 11 paid company holidays per year in the US, including one floating holiday."
+    relevant_docs: [holiday-calendar]
+  - id: RQ-024
+    question: "Above what amount is a purchase order required in BuyRight?"
+    reference_answer: "Every purchase of $5,000 or more requires a purchase order created in BuyRight."
+    relevant_docs: [procurement]
+  - id: RQ-025
+    question: "What documents does a vendor that stores customer data have to provide during vendor onboarding?"
+    reference_answer: "Such vendors complete a security questionnaire and provide a current SOC 2 Type II report or ISO 27001 certificate."
+    relevant_docs: [vendor-onboarding]
+  - id: RQ-026
+    question: "What are the standard payment terms for supplier invoices?"
+    reference_answer: "Standard payment terms are net 30, so invoices are due 30 days after the invoice date."
+    relevant_docs: [invoice-processing]
+  - id: RQ-027
+    question: "How fast do Tier 2 specialists respond to an escalated support ticket?"
+    reference_answer: "Tier 2 specialists respond to escalated tickets within 4 business hours."
+    relevant_docs: [customer-escalation]
+  - id: RQ-028
+    question: "How quickly is a P0 bug triaged?"
+    reference_answer: "P0 bugs are triaged within 2 hours, at any time of day."
+    relevant_docs: [bug-reporting]
+  - id: RQ-029
+    question: "When is code freeze before a Friday release?"
+    reference_answer: "Code freeze is at 5:00 pm Eastern on the Wednesday before the release."
+    relevant_docs: [release-process]
+  - id: RQ-030
+    question: "How much is the weekly on-call stipend for engineers?"
+    reference_answer: "On-call engineers receive a stipend of $300 per week."
+    relevant_docs: [on-call]
+  - id: RQ-031
+    question: "How long are production database backups retained?"
+    reference_answer: "Production database backups are retained for 35 days."
+    relevant_docs: [backup-policy, data-retention]
+  - id: RQ-032
+    question: "What is the recovery time objective for a full regional restore?"
+    reference_answer: "The recovery time objective (RTO) is 4 hours for a full regional restore, with a 24-hour RPO."
+    relevant_docs: [backup-policy]

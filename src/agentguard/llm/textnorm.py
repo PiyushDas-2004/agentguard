@@ -187,11 +187,13 @@ def rejoin_split_words(text: str, vocabulary: frozenset[str]) -> str:
             if i + span > len(words):
                 continue
             parts = words[i : i + span]
-            if not all(p.isalpha() for p in parts):
+            core = [p.strip(".,;:!?\"'()") for p in parts]
+            if not all(c.isalpha() for c in core) or any(p != c for p, c in zip(parts[:-1], core[:-1], strict=False)):
                 continue
-            candidate = "".join(parts)
-            if candidate.lower() in vocabulary and not all(p.lower() in vocabulary for p in parts):
-                out.append(candidate)
+            trailing = parts[-1][len(core[-1]) :] if parts[-1].startswith(core[-1]) else ""
+            candidate = "".join(core)
+            if candidate.lower() in vocabulary and not all(c.lower() in vocabulary for c in core):
+                out.append(candidate + trailing)
                 if i + span - 1 < len(seps):
                     out.append(seps[i + span - 1])
                 i += span

@@ -61,7 +61,7 @@ BACKTICK_RE = re.compile(r"`([^`\n]{1,300})`")
 FENCE_RE = re.compile(r"```[a-zA-Z0-9_-]*\n?(.*?)```", re.DOTALL)
 DQUOTE_RE = re.compile(r"\"([^\"\n]{1,500})\"|“([^”\n]{1,500})”")
 SQUOTE_RE = re.compile(r"(?<![A-Za-z])'([^'\n]{2,300})'(?![A-Za-z])")
-TOKEN_LITERAL_RE = re.compile(r"\b[A-Z]{2,}(?:-[A-Z0-9]+){1,4}\b")
+TOKEN_LITERAL_RE = re.compile(r"\b[A-Z]{2,}(?:-[A-Za-z0-9]+){1,4}\b")
 SECRET_VALUE_RE = re.compile(
     r"(?i)\b(?:code|key|token|password|passphrase|secret|pin|credential|api[_ -]?key)\b"
     r"[^\n:=]{0,30}?(?:\bis\b|:|=)\s*[\"'`]?([A-Za-z0-9][A-Za-z0-9_\-]{7,})"
@@ -69,8 +69,8 @@ SECRET_VALUE_RE = re.compile(
 
 DEFERRAL_RE = re.compile(
     r"\b(whenever|from now on|in (?:all )?future|next time|in the future|in later sessions|"
-    r"each time|every time|any time|anytime|going forward|in subsequent|for future|"
-    r"in every future|later on|once (?:the|a) (?:user|customer|someone) asks)\b"
+    r"going forward|in subsequent (?:sessions|conversations)|for future (?:sessions|conversations)|"
+    r"in every future|once (?:the|a) (?:user|customer|someone) asks)\b"
 )
 
 NEGATION_RE = re.compile(
@@ -113,12 +113,12 @@ INCLUDE_VERBS = (
     r"tag|stamp|echo|emit|close with|conclude with|add the (?:phrase|text|string|word))"
 )
 EXFIL_MEDIA = (
-    r"(image|img|picture|photo|pixel|badge|icon|logo|beacon|banner|thumbnail|link|hyperlink|"
-    r"url|anchor|markdown|!\[)"
+    r"\b(image|img|picture|photo|pixel|badge|icon|logo|beacon|banner|thumbnail|link|hyperlink|"
+    r"url|anchor|markdown)s?\b|!\["
 )
 EXFIL_VERBS = (
-    r"(render|include|display|show|add|embed|output|insert|append|put|place|end|attach|create|"
-    r"make|draw|print|generate|write|format|load|close|finish)"
+    r"\b(render|include|display|show|add|embed|output|insert|append|put|place|end|attach|create|"
+    r"make|draw|print|generate|write|format|load|close|finish)\b"
 )
 SENSITIVE_DATA = (
     r"(secret|code|token|key|password|system prompt|instructions|conversation|chat|history|"
@@ -620,7 +620,7 @@ def _file_intents(unit: str, low: str, source: str) -> list[ToolIntent]:
 
 def _shell_intent(unit: str, low: str, source: str) -> ToolIntent | None:
     explicit = "shell_exec" in low
-    verb = re.search(r"\b(run|execute|exec|launch|invoke|issue|type|enter|eval)\b", low)
+    verb = re.search(r"\b(run|execute|exec|launch|invoke|eval)\b", low)
     shellish = re.search(r"\b(shell|terminal|bash|command[- ]line|cmd|powershell|console|sh)\b|\bcommand\b", low)
     command = None
     ticks = BACKTICK_RE.findall(unit)

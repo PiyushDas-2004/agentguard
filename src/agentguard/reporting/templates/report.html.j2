@@ -1,0 +1,208 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AgentGuard report · {{ r.name }}</title>
+<style>
+:root{--bg:#f7f8fa;--panel:#fff;--ink:#1d2330;--muted:#5d6678;--line:#e2e6ee;--accent:#3355cc;
+--ok:#1e8a4c;--ok-bg:#e5f5ec;--warn:#a86400;--warn-bg:#fff3dd;--bad:#c62828;--bad-bg:#fdeaea;--mark:#ffe08a;--code:#f1f3f7}
+@media (prefers-color-scheme:dark){:root{--bg:#0f1218;--panel:#171b24;--ink:#e6e9ef;--muted:#9aa3b5;--line:#2a3140;
+--accent:#7d9bff;--ok:#5ad08a;--ok-bg:#12301f;--warn:#ffb74d;--warn-bg:#33270f;--bad:#ff6b6b;--bad-bg:#3a1717;--mark:#6b5a12;--code:#10141b}}
+*{box-sizing:border-box}
+body{margin:0;font:15px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;background:var(--bg);color:var(--ink)}
+header{padding:20px 16px;border-bottom:1px solid var(--line);background:var(--panel)}
+main{max-width:1180px;margin:0 auto;padding:16px}
+h1{font-size:22px;margin:0 0 4px}h2{font-size:18px;margin:28px 0 10px}h3{font-size:15px;margin:14px 0 6px}
+.muted{color:var(--muted)}.small{font-size:13px}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px;margin:10px 0;overflow-x:auto}
+.grid{display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(200px,1fr))}
+.kpi .v{font-size:28px;font-weight:700}.kpi .l{color:var(--muted);font-size:13px}
+table{border-collapse:collapse;width:100%;font-size:14px}
+th,td{text-align:left;padding:6px 8px;border-bottom:1px solid var(--line);vertical-align:top}
+th{font-weight:600;color:var(--muted);font-size:12px;text-transform:uppercase;letter-spacing:.03em}
+.badge{display:inline-block;padding:1px 8px;border-radius:999px;font-size:12px;font-weight:600}
+.pass{background:var(--ok-bg);color:var(--ok)}.fail{background:var(--bad-bg);color:var(--bad)}.inconclusive{background:var(--warn-bg);color:var(--warn)}
+.grade{font-size:40px;font-weight:800}
+.grade-A,.grade-B{color:var(--ok)}.grade-C{color:var(--warn)}.grade-D,.grade-F{color:var(--bad)}
+svg text{fill:var(--muted);font-size:10px}
+.bar-bg{fill:var(--line)}.bar-ci{fill:var(--accent);opacity:.45}.bar-pt{fill:var(--accent)}
+.filters{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:8px}
+input,select{font:inherit;padding:6px 8px;border:1px solid var(--line);border-radius:6px;background:var(--panel);color:var(--ink)}
+details{border-top:1px solid var(--line);padding:6px 0}summary{cursor:pointer}
+.turn{border-left:3px solid var(--line);margin:8px 0;padding:4px 10px;white-space:pre-wrap;word-break:break-word;font-size:13px}
+.turn.user{border-color:var(--accent)}.turn.assistant{border-color:var(--muted)}
+.role{font-weight:700;font-size:12px;text-transform:uppercase;color:var(--muted)}
+mark{background:var(--mark);color:inherit;border-radius:3px;padding:0 2px}
+.call{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px;border-radius:6px;padding:4px 8px;margin:4px 0;white-space:pre-wrap;word-break:break-all}
+.call.allowed{background:var(--ok-bg);color:var(--ok)}.call.blocked{background:var(--warn-bg);color:var(--warn)}.call.violation{background:var(--bad-bg);color:var(--bad)}
+code{background:var(--code);padding:1px 4px;border-radius:4px}
+.legend span{margin-right:12px}
+@media (max-width:640px){th.hide-sm,td.hide-sm{display:none}.grade{font-size:32px}}
+</style>
+</head>
+<body>
+<header>
+  <h1>AgentGuard report — {{ r.name }}</h1>
+  <div class="muted small">Run <code>{{ r.run_id }}</code> · target <code>{{ r.target.type }}</code> {{ r.target.name }} · {{ r.started_at.strftime('%Y-%m-%d %H:%M:%S') }} UTC
+  {% if r.partial %} · <span class="badge inconclusive">PARTIAL ({{ r.abort_reason }})</span>{% endif %}</div>
+</header>
+<main>
+<section id="summary">
+  <h2>Executive summary</h2>
+  <div class="grid">
+    <div class="panel kpi">
+      <svg viewBox="0 0 120 70" width="160" height="94" role="img" aria-label="risk gauge {{ '%.1f'|format(r.risk_score) }}">
+        <path d="M10 60 A50 50 0 0 1 110 60" fill="none" stroke="var(--line)" stroke-width="10"/>
+        <path d="M10 60 A50 50 0 0 1 110 60" fill="none" stroke="{{ 'var(--ok)' if r.risk_score <= 25 else ('var(--warn)' if r.risk_score <= 40 else 'var(--bad)') }}" stroke-width="10" stroke-dasharray="{{ '%.1f'|format(r.risk_score / 100 * 157) }} 157"/>
+        <text x="60" y="58" text-anchor="middle" style="font-size:18px;font-weight:700;fill:var(--ink)">{{ '%.1f'|format(r.risk_score) }}</text>
+      </svg>
+      <div class="l">Risk score (0–100, threshold {{ r.fail_threshold_risk|round(1) }})</div>
+    </div>
+    <div class="panel kpi"><div class="grade grade-{{ r.grade }}">{{ r.grade }}</div><div class="l">Grade · {{ 'PASSED' if r.passed_threshold else 'FAILED' }} threshold</div></div>
+    <div class="panel kpi"><div class="v">{{ r.cases|selectattr('status.value','equalto','fail')|list|length }} / {{ r.cases|length }}</div><div class="l">Cases failing (95% Wilson CI above {{ (r.status_threshold*100)|round(0) }}%)</div></div>
+    <div class="panel kpi"><div class="v">{{ r.total_trials }}</div><div class="l">Trials ({{ r.total_errors }} errors) · ${{ '%.4f'|format(r.total_cost_usd) }}</div></div>
+    {% if r.over_refusal_rate is not none %}<div class="panel kpi"><div class="v">{{ '%.1f'|format(r.over_refusal_rate*100) }}%</div><div class="l">Over-refusal rate (benign set, not in risk)</div></div>{% endif %}
+  </div>
+  <div class="panel">
+    <h3>Top critical failures</h3>
+    {% if top %}<table><tr><th>Case</th><th>Severity</th><th>Title</th><th>Violations</th></tr>
+    {% for c in top %}<tr><td><a href="#case-{{ c.case_id }}">{{ c.case_id }}</a></td><td>{{ c.severity.value }}</td><td>{{ c.title }}</td><td>{{ c.n_violations }}/{{ c.n_trials }}</td></tr>{% endfor %}
+    </table>{% else %}<p class="muted">No failing security cases.</p>{% endif %}
+  </div>
+  {% if r.warnings %}<div class="panel small"><h3>Warnings</h3><ul>{% for w in r.warnings[:20] %}<li>{{ w }}</li>{% endfor %}</ul></div>{% endif %}
+</section>
+
+<section id="categories">
+  <h2>Category scorecard</h2>
+  <div class="panel"><table>
+    <tr><th>Category</th><th>Cases</th><th>Fail</th><th class="hide-sm">Pass</th><th class="hide-sm">Inconcl.</th><th>Violation rate · 95% CI</th><th class="hide-sm">Risk</th></tr>
+    {% for item in categories %}{% set c = item.card %}
+    <tr><td><strong>{{ c.category.value }}</strong><div class="muted small">{{ item.title }}</div></td><td>{{ c.n_cases }}</td><td>{{ c.n_fail }}</td><td class="hide-sm">{{ c.n_pass }}</td><td class="hide-sm">{{ c.n_inconclusive }}</td>
+    <td><svg width="{{ item.bar.w + 40 }}" height="22" role="img" aria-label="rate {{ '%.2f'|format(c.violation_rate) }}"><rect class="bar-bg" x="0" y="8" width="{{ item.bar.w }}" height="6" rx="3"/><rect class="bar-ci" x="{{ item.bar.x1 }}" y="5" width="{{ [item.bar.x2 - item.bar.x1, 1]|max }}" height="12" rx="3"/><circle class="bar-pt" cx="{{ item.bar.cx }}" cy="11" r="4"/><text x="{{ item.bar.w + 4 }}" y="15">{{ '%.0f'|format(c.violation_rate*100) }}%</text></svg>
+    <div class="muted small">{{ c.n_violations }}/{{ c.n_trials }} · CI {{ '%.2f'|format(c.ci_low) }}–{{ '%.2f'|format(c.ci_high) }}</div></td>
+    <td class="hide-sm">{{ '%.1f'|format(c.risk) }}</td></tr>
+    {% endfor %}
+  </table></div>
+</section>
+
+<section id="owasp">
+  <h2>OWASP LLM Top 10 (2025) coverage</h2>
+  <div class="panel"><table><tr><th>Item</th><th>Cases</th><th>Fail</th><th>Pass</th><th>Inconclusive</th></tr>
+  {% for o in owasp %}<tr><td><a href="{{ o.url }}">{{ o.row.owasp_id }}</a> {{ o.row.title }}</td><td>{{ o.row.n_cases }}</td><td>{{ o.row.n_fail }}</td><td>{{ o.row.n_pass }}</td><td>{{ o.row.n_inconclusive }}</td></tr>{% endfor %}
+  </table></div>
+</section>
+
+<section id="robustness">
+  <h2>Mutation robustness</h2>
+  <div class="panel">
+  {% if robustness.by_transform %}
+    <p class="small muted">Violation rate on mutated variants compared with the seed prompt (mean over cases with mutations). Seed: <strong>{{ '%.0f'|format((robustness.seed or 0)*100) }}%</strong>.</p>
+    <table><tr><th>Transform</th><th>Mean violation rate</th><th>Δ vs seed</th></tr>
+    {% for m, rate in robustness.by_transform.items() %}<tr><td><code>{{ m }}</code></td><td>{{ '%.0f'|format(rate*100) }}%</td><td>{{ '%+.0f'|format((rate - (robustness.seed or 0))*100) }} pp</td></tr>{% endfor %}
+    </table>
+    {% if robustness.regressions %}<h3>Cases where obfuscation increased success</h3><ul class="small">{% for c in robustness.regressions %}<li><a href="#case-{{ c.case_id }}">{{ c.case_id }}</a>: seed {{ '%.0f'|format(c.seed_violation_rate*100) }}% → mutated {{ '%.0f'|format(c.mutated_violation_rate*100) }}%</li>{% endfor %}</ul>{% endif %}
+  {% else %}<p class="muted">Mutations were not enabled for this run.</p>{% endif %}
+  </div>
+</section>
+
+<section id="quality">
+  <h2>Quality</h2>
+  <div class="panel">
+  {% if r.quality %}{% set q = r.quality %}
+    <div class="grid">
+      <div class="kpi"><div class="v">{{ '%.0f'|format((q.task_success_rate or 0)*100) }}%</div><div class="l">Task success ({{ q.n_tasks }} tasks)</div></div>
+      {% for k, v in q.rag.items() %}<div class="kpi"><div class="v">{{ '%.2f'|format(v) }}</div><div class="l">RAG {{ k.replace('_',' ') }}</div></div>{% endfor %}
+      {% for k, v in q.consistency.items() %}<div class="kpi"><div class="v">{{ '%.2f'|format(v) }}</div><div class="l">Consistency ({{ k.replace('_',' ') }})</div></div>{% endfor %}
+    </div>
+    {% if q.trajectory %}<h3>Trajectory</h3><table><tr>{% for k in q.trajectory %}<th>{{ k.replace('_',' ') }}</th>{% endfor %}</tr><tr>{% for v in q.trajectory.values() %}<td>{{ '%.2f'|format(v) }}</td>{% endfor %}</tr></table>{% endif %}
+    {% for m in q.backend_messages %}<p class="small muted">{{ m }}</p>{% endfor %}
+  {% else %}<p class="muted">The quality suite was not run.</p>{% endif %}
+  </div>
+</section>
+
+<section id="performance">
+  <h2>Performance &amp; cost</h2>
+  <div class="panel"><table><tr><th>Calls</th><th>p50</th><th>p95</th><th>p99</th><th>Tokens in/out</th><th>Cost</th><th>Cost / trial</th><th>Error rate</th></tr>
+  {% set p = r.performance %}<tr><td>{{ p.n_calls }}</td><td>{{ '%.1f'|format(p.latency_p50_ms) }} ms</td><td>{{ '%.1f'|format(p.latency_p95_ms) }} ms</td><td>{{ '%.1f'|format(p.latency_p99_ms) }} ms</td><td>{{ p.tokens_in }} / {{ p.tokens_out }}</td><td>${{ '%.4f'|format(p.cost_usd) }}</td><td>${{ '%.6f'|format(p.cost_per_task_usd) }}</td><td>{{ '%.1f'|format(p.error_rate*100) }}%</td></tr></table></div>
+</section>
+
+<section id="cases">
+  <h2>Cases</h2>
+  <div class="panel">
+    <div class="filters">
+      <input id="q" type="search" placeholder="Search id, title, category…" aria-label="search cases">
+      <select id="fs" aria-label="status filter"><option value="">All statuses</option><option>fail</option><option>pass</option><option>inconclusive</option></select>
+      <select id="fc" aria-label="category filter"><option value="">All categories</option>{% for item in categories %}<option>{{ item.card.category.value }}</option>{% endfor %}</select>
+    </div>
+    <div class="legend small"><span class="call allowed">allowed tool call</span><span class="call blocked">blocked</span><span class="call violation">policy violation</span><mark>evidence</mark></div>
+    <table id="cases-table">
+      <tr><th>Case</th><th>Status</th><th class="hide-sm">Category</th><th>Rate · CI</th><th class="hide-sm">Severity</th></tr>
+      {% for cv in cases %}{% set c = cv.case %}
+      <tr class="case-row" data-status="{{ c.status.value }}" data-category="{{ c.category.value }}" data-text="{{ (c.case_id ~ ' ' ~ c.title ~ ' ' ~ c.category.value)|lower }}" id="case-{{ c.case_id }}">
+        <td colspan="5">
+          <details>
+            <summary><strong>{{ c.case_id }}</strong> <span class="badge {{ c.status.value }}">{{ c.status.value }}</span> {{ c.title }}
+              <span class="muted small">· {{ c.category.value }} · {{ c.n_violations }}/{{ c.n_trials }}{% if c.n_errors %} · {{ c.n_errors }} errors{% endif %} · {{ c.severity.value }}</span>
+              <svg width="160" height="14"><rect class="bar-bg" x="0" y="5" width="120" height="4" rx="2"/><rect class="bar-ci" x="{{ cv.bar.x1 }}" y="3" width="{{ [cv.bar.x2 - cv.bar.x1, 1]|max }}" height="8" rx="2"/><circle class="bar-pt" cx="{{ cv.bar.cx }}" cy="7" r="3"/></svg>
+            </summary>
+            <div class="small muted">OWASP {{ c.owasp_llm|join(', ') or '—' }} · CI {{ '%.2f'|format(c.ci_low) }}–{{ '%.2f'|format(c.ci_high) }} · risk {{ '%.2f'|format(c.risk_contribution) }}
+            {% if c.seed_violation_rate is not none %} · seed {{ '%.0f'|format(c.seed_violation_rate*100) }}%{% endif %}{% if c.mutated_violation_rate is not none %} · mutated {{ '%.0f'|format(c.mutated_violation_rate*100) }}%{% endif %}
+            {% if c.detectors_triggered %} · detectors {% for k, v in c.detectors_triggered.items() %}{{ k }}×{{ v }} {% endfor %}{% endif %}</div>
+            {% for s in cv.samples %}
+            <details>
+              <summary class="small">Trial {{ s.sample.trial_index }}{% if s.sample.mutation_id %} · mutation <code>{{ s.sample.mutation_id }}</code>{% endif %} ·
+                {% if s.sample.error %}<span class="badge inconclusive">error</span> {{ s.sample.error.type }}{% elif s.sample.violated %}<span class="badge fail">violated</span>{% else %}<span class="badge pass">clean</span>{% endif %}</summary>
+              {% for v in s.verdicts %}<div class="small"><strong>{{ v.detector_id }}</strong>: {{ v.explanation }}{% for e in v.evidence[:4] %}<div class="muted">↳ {{ e.reason }}{% if e.turn_index < 0 %}: <code>{{ e.text[:200] }}</code>{% endif %}</div>{% endfor %}</div>{% endfor %}
+              {% for t in s.view.turns %}
+              <div class="turn {{ t.role }}"><div class="role">{{ t.role }}{% if t.session > 1 %} · session {{ t.session }}{% endif %} <span class="muted">{{ t.meta }}</span></div>
+              {%- for call in t.calls %}<div class="call {{ call.cls }}">⚙ {{ call.name }}({{ call.args }}){% if call.note %} — {{ call.note }}{% endif %}{% if call.result %}
+→ {{ call.result }}{% endif %}</div>{% endfor -%}
+              {%- for seg in t.segments %}{% if seg.reason %}<mark title="{{ seg.reason }}">{{ seg.text }}</mark>{% else %}{{ seg.text }}{% endif %}{% endfor -%}
+              {% if t.truncated %}<div class="muted small">[{{ t.chars }} chars, truncated in report]</div>{% endif %}</div>
+              {% endfor %}
+            </details>
+            {% endfor %}
+          </details>
+        </td>
+      </tr>
+      {% endfor %}
+    </table>
+  </div>
+</section>
+
+<section id="remediation">
+  <h2>Remediation guidance</h2>
+  {% if remediation %}{% for item in remediation %}
+  <div class="panel"><h3>{{ item.category.value }} — {{ item.title }}</h3><ul>{% for line in item['items'] %}<li>{{ line }}</li>{% endfor %}</ul></div>
+  {% endfor %}{% else %}<div class="panel muted">No failing categories.</div>{% endif %}
+</section>
+
+<section id="metadata">
+  <h2>Run metadata</h2>
+  <div class="panel small"><table>
+    <tr><td>Run id</td><td><code>{{ r.run_id }}</code></td></tr>
+    <tr><td>AgentGuard</td><td>{{ r.agentguard_version }}</td></tr>
+    <tr><td>Git SHA</td><td><code>{{ r.git_sha or 'n/a' }}</code></td></tr>
+    <tr><td>Config hash</td><td><code>{{ r.config_hash }}</code></td></tr>
+    <tr><td>Seed</td><td>{{ r.seed }}</td></tr>
+    <tr><td>Trials per case</td><td>{{ r.trials_per_case }}</td></tr>
+    <tr><td>Status threshold</td><td>{{ r.status_threshold }}</td></tr>
+    <tr><td>Duration</td><td>{{ '%.1f'|format(r.duration_s) }} s</td></tr>
+    <tr><td>Target details</td><td><code>{{ r.target.details|tojson }}</code></td></tr>
+  </table></div>
+</section>
+</main>
+<script>
+(function(){
+  var q=document.getElementById('q'),fs=document.getElementById('fs'),fc=document.getElementById('fc');
+  function apply(){var t=(q.value||'').toLowerCase(),s=fs.value,c=fc.value;
+    document.querySelectorAll('.case-row').forEach(function(r){
+      var ok=(!t||r.dataset.text.indexOf(t)>=0)&&(!s||r.dataset.status===s)&&(!c||r.dataset.category===c);
+      r.style.display=ok?'':'none';});}
+  [q,fs,fc].forEach(function(e){e.addEventListener('input',apply);e.addEventListener('change',apply);});
+  if(location.hash){var el=document.querySelector(location.hash+' details');if(el){el.open=true;}}
+})();
+</script>
+</body>
+</html>
