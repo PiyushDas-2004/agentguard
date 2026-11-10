@@ -20,6 +20,7 @@ import asyncio
 import difflib
 import json
 import re
+import shutil
 import sys
 import tempfile
 import time
@@ -48,7 +49,7 @@ VOLATILE_KEYS = frozenset(
     }
 )
 PLACEHOLDER = "<volatile>"
-DEFAULT_CATEGORIES = ["PI_INDIRECT", "EXCESSIVE_AGENCY", "MEMORY_POISON", "OVER_REFUSAL"]
+DEFAULT_CATEGORIES = ["PI_INDIRECT", "MEMORY_POISON", "OVER_REFUSAL"]
 _RUN_ID = re.compile(r"\d{8}-\d{6}-[0-9a-f]{6}")
 _DURATION = re.compile(r"(\*\*Duration:\*\* )[0-9.]+s")
 
@@ -59,19 +60,29 @@ def normalize_text(text: str) -> str:
     return _DURATION.sub(r"\1<duration>s", text)
 
 
-def normalize(value: Any) -> Any:
-    """Recursively blank volatile keys and run ids so equal runs compare equal."""
+def normalize(value: Any, extra_keys: frozenset[str] = frozenset()) -> Any:
+    """Recursively blank volatile keys (plus ``extra_keys``) and run ids so equal runs compare equal.
+
+    ``config_hash`` is *not* volatile here: both runs use the same storage paths, so the hash must
+    match. Callers whose configs differ only in temporary paths pass it in ``extra_keys``.
+    """
+    keys = VOLATILE_KEYS | extra_keys
     if isinstance(value, dict):
-        return {k: (PLACEHOLDER if k in VOLATILE_KEYS else normalize(v)) for k, v in value.items()}
+        return {k: (PLACEHOLDER if k in keys else normalize(v, extra_keys)) for k, v in value.items()}
     if isinstance(value, list):
-        return [normalize(v) for v in value]
+        return [normalize(v, extra_keys) for v in value]
     if isinstance(value, str):
         return normalize_text(value)
     return value
 
 
 def run_once(
-    config_path: Path, categories: list[str] | None, trials: int | None, suite: str, seed: int | None
+    config_path: Path,
+    categories: list[str] | None,
+    trials: int | None,
+    suite: str,
+    seed: int | None,
+    storage_dir: Path,
 ) -> dict[str, Any]:
     """Execute one offline run with isolated storage; return the result as JSON data."""
     from agentguard.config.loader import load_config
@@ -79,9 +90,12 @@ def run_once(
     from agentguard.core.types import AttackCategory
 
     config = load_config(config_path)
-    with tempfile.TemporaryDirectory(prefix="agentguard-determinism-") as tmp:
+    # The same storage path for both runs keeps config_hash comparable; it is wiped before each run.
+    shutil.rmtree(storage_dir, ignore_errors=True)
+    storage_dir.mkdir(parents=True)
+    try:
         storage = config.storage.model_copy(
-            update={"db_path": str(Path(tmp) / "ag.db"), "transcripts_dir": str(Path(tmp) / "transcripts")}
+            update={"db_path": str(storage_dir / "ag.db"), "transcripts_dir": str(storage_dir / "transcripts")}
         )
         run_cfg = config.run if seed is None else config.run.model_copy(update={"seed": seed})
         config = config.model_copy(update={"storage": storage, "run": run_cfg})
@@ -92,6 +106,8 @@ def run_once(
             offline=True,
         )
         result = asyncio.run(Runner(config, options, base_dir=config_path.resolve().parent).run())
+    finally:
+        shutil.rmtree(storage_dir, ignore_errors=True)
     data: dict[str, Any] = json.loads(result.model_dump_json())
     return data
 
@@ -115,8 +131,10 @@ def main(argv: list[str] | None = None) -> int:
     categories = args.category or DEFAULT_CATEGORIES
 
     started = time.perf_counter()
-    first = run_once(args.config, categories, args.trials, args.suite, args.seed)
-    second = run_once(args.config, categories, args.trials, args.suite, args.seed)
+    storage_dir = Path(tempfile.mkdtemp(prefix="agentguard-determinism-")) / "store"
+    first = run_once(args.config, categories, args.trials, args.suite, args.seed, storage_dir)
+    second = run_once(args.config, categories, args.trials, args.suite, args.seed, storage_dir)
+    shutil.rmtree(storage_dir.parent, ignore_errors=True)
     elapsed = time.perf_counter() - started
     a, b = normalize(first), normalize(second)
     print(

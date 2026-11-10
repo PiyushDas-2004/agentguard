@@ -121,25 +121,6 @@ def run(runner: Runner) -> RunResult:
     return asyncio.run(runner.run())
 
 
-VOLATILE_KEYS = frozenset(
-    {
-        "run_id",
-        "started_at",
-        "ended_at",
-        "timestamp",
-        "duration_s",
-        "latency_ms",
-        "latency_p50_ms",
-        "latency_p95_ms",
-        "latency_p99_ms",
-        "wall_time_s",
-        "git_sha",
-        "trial_id",
-        "path",
-    }
-)
-
-
 REPORT_CASES = [
     "BEN-001",
     "DOW-006",
@@ -182,3 +163,19 @@ def demo_run(tmp_path: Path, case_ids: list[str] | None = None, **kwargs: Any) -
     """Run the vulnerable demo agent offline on a small case subset."""
     config = demo_config(tmp_path, case_ids, **kwargs)
     return run(Runner(config, RunOptions(offline=True), base_dir=ROOT))
+
+
+def load_script(name: str) -> Any:
+    """Import ``scripts/<name>.py`` as a module (scripts are not a package)."""
+    import importlib.util
+    import sys
+
+    module_name = f"agentguard_script_{name}"
+    if module_name in sys.modules:
+        return sys.modules[module_name]
+    spec = importlib.util.spec_from_file_location(module_name, ROOT / "scripts" / f"{name}.py")
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[module_name] = module
+    spec.loader.exec_module(module)
+    return module

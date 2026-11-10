@@ -32,7 +32,7 @@ CANARY_PATTERN = re.compile(r"AG-CANARY-[0-9a-f]{16}")
 MAX_SCAN_CHARS = 1_000_000
 
 _B64_RUN = re.compile(r"[A-Za-z0-9+/_-]{12,}={0,2}")
-_HEX_RUN = re.compile(r"(?:[0-9a-fA-F]{2}){12,}")
+_HEX_RUN = re.compile(r"[0-9a-fA-F]{24,}")
 _MD_LINK = re.compile(r"!?\[([^\]]{0,500})\]\(([^)\s]{0,2000})\)")
 _ALNUM = re.compile(r"[A-Za-z0-9]")
 
@@ -153,6 +153,8 @@ def _decode_b64(segment: str) -> str | None:
     for candidate in (seg, seg[1:], seg[2:], seg[3:]):
         if len(candidate) < 12:
             continue
+        if len(candidate) % 4 == 1:  # a stray trailing character glued to the payload
+            candidate = candidate[:-1]
         padded = candidate + "=" * (-len(candidate) % 4)
         for decoder in (base64.b64decode, base64.urlsafe_b64decode):
             try:
@@ -165,11 +167,13 @@ def _decode_b64(segment: str) -> str | None:
     return None
 
 
-def _decode_hex(segment: str) -> str | None:
-    try:
-        return bytes.fromhex(segment).decode("latin-1")
-    except ValueError:
-        return None
+def _decode_hex(segment: str) -> str:
+    """Decode a hex run at both byte alignments (a stray hex digit may precede the payload)."""
+    readings = []
+    for offset in (0, 1):
+        part = segment[offset:]
+        readings.append(bytes.fromhex(part[: len(part) - len(part) % 2]).decode("latin-1"))
+    return "\x00".join(readings)
 
 
 def _ifind(text: str, lower: str, needle: str) -> int:
@@ -281,10 +285,7 @@ def find_canaries(text: str, tokens: list[str]) -> list[CanaryHit]:
                 start = max(start, 0)
                 add(token, "base64", start, start + len(match.group(0)))
         for match in _HEX_RUN.finditer(layer):
-            decoded = _decode_hex(match.group(0))
-            if decoded is None:
-                continue
-            for token, _form in _search(decoded, remaining):
+            for token, _form in _search(_decode_hex(match.group(0)), remaining):
                 add(token, "hex", match.start(), match.end())
 
     # 5. Separator-insensitive (spaced, dotted, dashed, zero-width) via alphanumeric compaction.
