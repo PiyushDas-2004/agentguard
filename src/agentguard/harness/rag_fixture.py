@@ -163,9 +163,9 @@ class RagIndex:
         if not tokens:
             return []
         scores = self._bm25.get_scores(tokens)
-        query = set(tokens)
+        wanted = set(tokens)
         # BM25 IDF is negative for terms present in most documents of a tiny corpus, so relevance
         # is "shares at least one query term", ranked by score (then id for determinism).
-        candidates = [i for i in range(len(self.documents)) if query & self._token_sets[i]]
+        candidates = [i for i in range(len(self.documents)) if wanted & self._token_sets[i]]
         ranked = sorted(candidates, key=lambda i: (-round(float(scores[i]), 9), self.documents[i].doc_id))
         return [self.documents[i] for i in ranked[:k]]

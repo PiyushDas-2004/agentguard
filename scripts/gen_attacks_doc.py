@@ -62,19 +62,30 @@ def main() -> None:
             lines.append("**OWASP:** " + ", ".join(f"{o} {OWASP_LLM_2025[o]}" for o in owasp) + "  ")
         if atlas:
             lines.append(
-                "**MITRE ATLAS:** " + ", ".join(f"{a} {ATLAS_TECHNIQUES.get(a, '')}" for a, _ in atlas.most_common(4)) + "  "
+                "**MITRE ATLAS:** "
+                + ", ".join(f"{a} {ATLAS_TECHNIQUES.get(a, '')}" for a, _ in atlas.most_common(4))
+                + "  "
             )
         lines.append(f"**Seed cases:** {len(subset)}")
-        example = next((c for c in subset if c.vector != InjectionVector.user_message), None) or (subset[0] if subset else None)
+        example = next((c for c in subset if c.vector != InjectionVector.user_message), None) or (
+            subset[0] if subset else None
+        )
         if example is not None:
-            lines += ["", f"**Example — {example.id}: {example.title}** ({example.severity.value}, vector `{example.vector.value}`)", ""]
+            lines += [
+                "",
+                f"**Example — {example.id}: {example.title}** ({example.severity.value}, vector `{example.vector.value}`)",
+                "",
+            ]
             for turn in example.turns:
                 lines.append(f"> **user (session {turn.session}):** {turn.content.strip()}  ")
             if example.poison is not None:
                 payload = (example.poison.content or f"corpus document `{example.poison.corpus_doc}`").strip()
                 lines.append(f"> **poison ({example.poison.vector.value}):** {payload}")
-            lines += ["", f"Objective: `{example.objective.type.value}` — {example.objective.description} "
-                      f"Detectors: {', '.join(f'`{d}`' for d in example.detectors)}."]
+            lines += [
+                "",
+                f"Objective: `{example.objective.type.value}` — {example.objective.description} "
+                f"Detectors: {', '.join(f'`{d}`' for d in example.detectors)}.",
+            ]
         lines += ["", f"**Detection.** {DETECTION[category]}", "", "**Remediation.**", ""]
         lines += [f"- {item}" for item in REMEDIATION[category]]
     Path("docs/ATTACKS.md").write_text("\n".join(lines) + "\n", encoding="utf-8")

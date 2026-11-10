@@ -14,7 +14,7 @@ from agentguard.attacks.loader import load_cases
 from agentguard.config.loader import parse_config
 from agentguard.config.models import JudgeConfig
 from agentguard.core.errors import ConfigError
-from agentguard.core.runner import RunOptions, Runner, build_judge
+from agentguard.core.runner import Runner, RunOptions, build_judge
 
 PLUGINS = Path(__file__).resolve().parents[2] / "examples" / "plugins"
 PACK = PLUGINS / "agentguard_example_plugins" / "packs" / "support_desk.yaml"
@@ -72,8 +72,9 @@ def test_detector_entry_point_reaches_runner(tmp_path: Path, monkeypatch: pytest
 
 
 def test_judge_plugin_is_built(monkeypatch: pytest.MonkeyPatch) -> None:
-    point = EntryPoint(name="keyword", value="agentguard_example_plugins.keyword_judge:KeywordJudge",
-                       group="agentguard.judges")
+    point = EntryPoint(
+        name="keyword", value="agentguard_example_plugins.keyword_judge:KeywordJudge", group="agentguard.judges"
+    )
     import agentguard.plugins as plugins
 
     monkeypatch.setattr(plugins, "entry_points", lambda *, group: [point] if group == "agentguard.judges" else [])
