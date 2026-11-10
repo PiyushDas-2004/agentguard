@@ -1,0 +1,72 @@
+name: AgentGuard
+description: Red-team and evaluate an AI agent with AgentGuard; fails the job when the risk score exceeds the threshold.
+branding:
+  icon: shield
+  color: blue
+inputs:
+  config:
+    description: Path to the AgentGuard YAML config.
+    required: true
+  fail-threshold:
+    description: Risk score (0-100) above which the job fails. Defaults to the config value.
+    required: false
+    default: ""
+  upload-sarif:
+    description: Upload SARIF results to GitHub code scanning (needs security-events write permission).
+    required: false
+    default: "true"
+  offline:
+    description: Use deterministic mock models (no LLM API calls).
+    required: false
+    default: "false"
+  version:
+    description: AgentGuard version / pip spec to install.
+    required: false
+    default: "agentguard"
+outputs:
+  risk-score:
+    description: The run's risk score.
+    value: ${{ steps.run.outputs.risk-score }}
+  grade:
+    description: The run's grade (A-F).
+    value: ${{ steps.run.outputs.grade }}
+runs:
+  using: composite
+  steps:
+    - uses: astral-sh/setup-uv@v6
+    - name: Install AgentGuard
+      shell: bash
+      run: uv tool install "${{ inputs.version }}"
+    - name: Run AgentGuard
+      id: run
+      shell: bash
+      env:
+        AG_CONFIG: ${{ inputs.config }}
+        AG_THRESHOLD: ${{ inputs.fail-threshold }}
+        AG_OFFLINE: ${{ inputs.offline }}
+      run: |
+        args=(run -c "$AG_CONFIG" --out-dir agentguard-reports)
+        if [ -n "$AG_THRESHOLD" ]; then args+=(--fail-threshold "$AG_THRESHOLD"); fi
+        if [ "$AG_OFFLINE" = "true" ]; then args+=(--offline); fi
+        set +e
+        agentguard "${args[@]}"
+        code=$?
+        set -e
+        json=$(ls agentguard-reports/*.json | head -n 1)
+        python3 -c "import json,sys; r=json.load(open(sys.argv[1])); print(f\"risk-score={r['risk_score']}\"); print(f\"grade={r['grade']}\")" "$json" >> "$GITHUB_OUTPUT"
+        cat agentguard-reports/*.md >> "$GITHUB_STEP_SUMMARY" || true
+        echo "AGENTGUARD_EXIT=$code" >> "$GITHUB_ENV"
+    - name: Upload SARIF
+      if: inputs.upload-sarif == 'true'
+      uses: github/codeql-action/upload-sarif@v3
+      with:
+        sarif_file: agentguard-reports
+        category: agentguard
+    - name: Upload reports
+      uses: actions/upload-artifact@v4
+      with:
+        name: agentguard-reports
+        path: agentguard-reports/
+    - name: Enforce threshold
+      shell: bash
+      run: exit "${AGENTGUARD_EXIT:-3}"

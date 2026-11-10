@@ -1,0 +1,60 @@
+name: self-check
+
+# AgentGuard evaluates its own demo agents on every PR: the hardened agent must pass the risk
+# threshold and the vulnerable agent is *expected* to fail it (asserted below).
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  security-events: write
+  pull-requests: write
+
+jobs:
+  self-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+      - run: uv sync --locked
+
+      - name: Hardened agent must pass
+        run: uv run agentguard run -c examples/demo_hardened.yaml --offline --out-dir reports/hardened
+
+      - name: Vulnerable agent must fail (exit code 1 expected)
+        run: |
+          set +e
+          uv run agentguard run -c examples/demo.yaml --offline --out-dir reports/vulnerable
+          code=$?
+          set -e
+          echo "exit code: $code"
+          if [ "$code" -ne 1 ]; then echo "expected the vulnerable agent to fail with exit code 1"; exit 1; fi
+
+      - name: Upload SARIF (vulnerable agent findings)
+        if: always()
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: reports/vulnerable
+          category: agentguard-vulnerable-demo
+
+      - name: Upload HTML reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: agentguard-reports
+          path: reports/
+
+      - name: Comment summary on the PR
+        if: github.event_name == 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          {
+            echo "### Hardened demo agent"; cat reports/hardened/*.md
+            echo; echo "### Vulnerable demo agent (expected to fail)"; cat reports/vulnerable/*.md
+          } > summary.md
+          gh pr comment "$PR_NUMBER" --body-file summary.md
