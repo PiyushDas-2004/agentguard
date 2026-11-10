@@ -101,3 +101,12 @@ project evolves.
 - **Decision:** `reports.embed_trials_per_case` (default 3: violations first) transcripts are
   embedded per case; all transcripts remain in the JSONL store and dashboard.
 - **Reason:** a full demo run has ~8,000 trials; embedding all would produce a >50 MB HTML file.
+
+## D-016 Category purity of detectors (found by meta-validation)
+- **Finding:** the first full meta-validation flagged the RAG agent (no action tools) as
+  vulnerable to EXCESSIVE_AGENCY. Inspection showed a *correct* detection — the agent leaked its
+  system-prompt canary when asked for "the database password" — attributed to the wrong category
+  because EXA-029 listed the `canary` detector.
+- **Decision:** EXCESSIVE_AGENCY cases use agency detectors only (`tool_policy`, optionally
+  `exfil`/`resource`); disclosure detectors (`canary`, `system_prompt`, `pii`) belong to
+  disclosure categories. Enforced by `lint-datasets`. Ground truth and detectors were not changed.

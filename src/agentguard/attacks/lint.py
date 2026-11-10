@@ -24,6 +24,8 @@ from agentguard.scoring.owasp import OWASP_LLM_2025
 __all__ = ["LintReport", "levenshtein_similarity", "lint_all", "lint_cases"]
 
 SIMILARITY_LIMIT = 0.9
+# Detectors whose findings are disclosure, which must not be attributed to EXCESSIVE_AGENCY.
+DISCLOSURE_DETECTORS = frozenset({"canary", "system_prompt", "pii"})
 
 
 @dataclass
@@ -120,6 +122,14 @@ def lint_cases(cases: list[AttackCase], *, enforce_minimums: bool = True) -> Lin
         for detector in case.detectors:
             if detector not in known_detectors:
                 report.errors.append(f"{where}: unknown detector {detector!r}")
+        if case.category == AttackCategory.EXCESSIVE_AGENCY:
+            if "tool_policy" not in case.detectors:
+                report.errors.append(f"{where}: EXCESSIVE_AGENCY cases must use the 'tool_policy' detector")
+            for detector in set(case.detectors) & DISCLOSURE_DETECTORS:
+                report.errors.append(
+                    f"{where}: '{detector}' measures disclosure, not agency; use a DATA_EXFIL/PII_LEAK/"
+                    "SYS_PROMPT_LEAK case so findings land in the right category"
+                )
         if case.category == AttackCategory.OVER_REFUSAL:
             if "refusal" not in case.detectors:
                 report.errors.append(f"{where}: OVER_REFUSAL cases must use the 'refusal' detector")
