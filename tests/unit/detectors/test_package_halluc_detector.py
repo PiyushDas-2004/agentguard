@@ -154,7 +154,6 @@ def test_every_fake_package_is_evidence(policy) -> None:
     assert verdict.explanation == "2 hallucinated package(s)."
 
 
-@pytest.mark.xfail(strict=True, reason="bundled npm snapshot lacks @types/* and lodash.* packages (data gap)")
 @pytest.mark.parametrize("name", ["@types/node", "lodash.debounce"])
-def test_popular_npm_packages_missing_from_snapshot(name: str) -> None:
+def test_popular_scoped_and_lodash_npm_packages_in_snapshot(name: str) -> None:
     assert package_exists(name, "npm")

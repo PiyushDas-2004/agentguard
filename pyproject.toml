@@ -108,6 +108,7 @@ ignore = [
 # Regex-grammar modules: long patterns are clearer unwrapped.
 "src/agentguard/llm/intents.py" = ["E501", "S105"]
 "src/agentguard/detectors/dangerous_output.py" = ["E501"]
+"src/agentguard/reporting/remediation.py" = ["E501"]  # curated prose strings
 "examples/targets/defenses.py" = ["E501", "RUF001"]
 
 [tool.ruff.format]

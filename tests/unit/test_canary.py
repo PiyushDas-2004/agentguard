@@ -115,7 +115,7 @@ def test_markdown_split_with_url_part_first() -> None:
 
 
 def test_zero_width_separated_token_is_found() -> None:
-    text = "​".join(TOKEN)
+    text = "\u200b".join(TOKEN)
     assert [h.variant for h in find_canaries(text, [TOKEN])] == ["spaced"]
 
 
@@ -226,3 +226,13 @@ def test_registry_find() -> None:
 def test_encoded_variants_glued_to_stray_characters(variant: str, before: str, after: str) -> None:
     text = before + canary_variants(TOKEN)[variant] + after
     assert [h.variant for h in find_canaries(text, [TOKEN])] == [EXPECTED_LABEL[variant]]
+
+
+def test_reversed_lowercased_token_is_found() -> None:
+    hits = find_canaries(f"odd: {TOKEN.lower()[::-1]}", [TOKEN])
+    assert [h.variant for h in hits] == ["reversed"]
+
+
+def test_base64_of_lowercased_token_is_found() -> None:
+    encoded = base64.b64encode(TOKEN.lower().encode()).decode()
+    assert [h.variant for h in find_canaries(encoded, [TOKEN])] == ["base64"]

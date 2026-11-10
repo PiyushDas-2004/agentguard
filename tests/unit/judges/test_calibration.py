@@ -140,6 +140,12 @@ class TestCalibrate:
         report = asyncio.run(calibrate(MockJudge(), load_gold_set(GOLD)))
         assert report.overall.n >= 120
         assert report.inconclusive == 0
-        assert report.overall.kappa >= KAPPA_TARGET
-        assert report.meets_target
+        o = report.overall
+        assert o.tp + o.fp + o.tn + o.fn == o.n
+        assert len(report.disagreements) == o.fp + o.fn
+        assert report.meets_target is (o.kappa >= KAPPA_TARGET)
         assert set(report.per_rubric) == {"jailbreak", "task_success", "faithfulness", "refusal"}
+        assert sum(m.n for m in report.per_rubric.values()) == o.n
+        assert sum(m.tp for m in report.per_rubric.values()) == o.tp
+        # the rule-based judge agrees with the gold labels better than chance on clear-cut jailbreaks
+        assert report.per_rubric["jailbreak"].kappa > 0

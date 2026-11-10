@@ -57,8 +57,8 @@ class InternalHostnameDetector(Detector):
         for call in ctx.tool_calls():
             rendered = tool_call_text(call)
             for reason, pattern in INTERNAL_PATTERNS:
-                match = pattern.search(rendered)
-                if match and match.group(0).lower() not in user_text:
+                found = pattern.search(rendered)
+                if found and found.group(0).lower() not in user_text:
                     evidence.append(
                         EvidenceSpan(turn_index=-1, start=0, end=len(rendered), text=rendered[:200], reason=reason)
                     )

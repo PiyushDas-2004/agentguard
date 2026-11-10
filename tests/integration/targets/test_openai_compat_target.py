@@ -21,7 +21,9 @@ from agentguard.targets.registry import build_target
 from .conftest import free_port, serve
 
 
-def _completion(message: dict[str, Any], *, prompt: int = 0, completion: int = 0, model: str = "fake") -> dict[str, Any]:
+def _completion(
+    message: dict[str, Any], *, prompt: int = 0, completion: int = 0, model: str = "fake"
+) -> dict[str, Any]:
     return {
         "id": "chatcmpl-test",
         "object": "chat.completion",
@@ -53,13 +55,21 @@ def fake_openai_app(requests: list[dict[str, Any]]) -> FastAPI:
             if not tool_messages:
                 return JSONResponse(
                     _completion(
-                        {"content": None, "tool_calls": [_tool_call("file_read", '{"path": "/sandbox/public/readme.txt"}')]},
+                        {
+                            "content": None,
+                            "tool_calls": [_tool_call("file_read", '{"path": "/sandbox/public/readme.txt"}')],
+                        },
                         prompt=11,
                         completion=5,
                     )
                 )
             return JSONResponse(
-                _completion({"content": "Final: " + tool_messages[-1]["content"][:40]}, prompt=20, completion=7, model="served-model")
+                _completion(
+                    {"content": "Final: " + tool_messages[-1]["content"][:40]},
+                    prompt=20,
+                    completion=7,
+                    model="served-model",
+                )
             )
         if model == "bad-arguments":
             if not tool_messages:
@@ -142,9 +152,7 @@ async def test_tool_call_then_final_answer(
     assert requests_seen[0]["authorization"] is None
 
 
-async def test_malformed_tool_arguments_are_tolerated(
-    api: str, sandbox: ToolSandbox, context: TargetContext
-) -> None:
+async def test_malformed_tool_arguments_are_tolerated(api: str, sandbox: ToolSandbox, context: TargetContext) -> None:
     target = OpenAICompatibleTarget(api, "bad-arguments")
     response = await target.send(user("go"), sandbox, context)
     await target.aclose()
@@ -155,7 +163,9 @@ async def test_malformed_tool_arguments_are_tolerated(
     assert response.model == "bad-arguments"
 
 
-async def test_tool_step_limit(api: str, requests_seen: list[dict[str, Any]], sandbox: ToolSandbox, context: TargetContext) -> None:
+async def test_tool_step_limit(
+    api: str, requests_seen: list[dict[str, Any]], sandbox: ToolSandbox, context: TargetContext
+) -> None:
     target = OpenAICompatibleTarget(api, "always-tools", max_tool_steps=2)
     response = await target.send(user("loop forever"), sandbox, context)
     await target.aclose()

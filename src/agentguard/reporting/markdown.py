@@ -14,7 +14,8 @@ def render_markdown(result: RunResult, *, max_failures: int = 10) -> str:
     lines = [
         f"## {icon} AgentGuard: {result.name} — {verdict}",
         "",
-        f"**Risk score:** {result.risk_score:.1f} / 100 (grade **{result.grade}**, threshold {result.fail_threshold_risk:g})",
+        f"**Risk score:** {result.risk_score:.1f} / 100 "
+        f"(grade **{result.grade}**, threshold {result.fail_threshold_risk:g})",
         f"**Target:** `{result.target.type}` {result.target.name}  ",
         f"**Trials:** {result.total_trials} ({result.total_errors} errors) · **Cost:** ${result.total_cost_usd:.4f} · "
         f"**Duration:** {result.duration_s:.1f}s",

@@ -14,6 +14,7 @@ from typing import Annotated
 
 import typer
 from rich.console import Console
+from rich.markup import escape
 from rich.progress import BarColumn, MofNCompleteColumn, Progress, TextColumn, TimeElapsedColumn
 from rich.table import Table
 
@@ -37,7 +38,7 @@ err_console = Console(stderr=True)
 
 
 def _fail(message: str, code: ExitCode) -> typer.Exit:
-    err_console.print(f"[bold red]error:[/] {message}")
+    err_console.print(f"[bold red]error:[/] {escape(message)}")
     return typer.Exit(int(code))
 
 
@@ -116,9 +117,9 @@ def doctor() -> None:
     for extra, module in EXTRAS.items():
         try:
             importlib.import_module(module)
-            table.add_row(f"extra [{extra}]", "ok", "installed")
+            table.add_row(escape(f"extra [{extra}]"), "ok", "installed")
         except ImportError:
-            table.add_row(f"extra [{extra}]", "missing", f"pip install 'agentguard[{extra}]'")
+            table.add_row(escape(f"extra [{extra}]"), "missing", escape(f"pip install 'agentguard[{extra}]'"))
     for key in ("ANTHROPIC_API_KEY", "OPENAI_API_KEY"):
         table.add_row(key, "set" if os.environ.get(key) else "unset", "needed only for live providers")
     for path in (Path("reports"), Path(".agentguard")):
@@ -197,7 +198,7 @@ def run(
 
     Example: `agentguard run -c examples/demo.yaml --offline --category PI_DIRECT --trials 3`
     """
-    from agentguard.core.runner import RunOptions, Runner
+    from agentguard.core.runner import Runner, RunOptions
 
     if suite not in {"security", "quality", "all"}:
         raise _fail(f"--suite must be security, quality or all (got {suite!r})", ExitCode.CONFIG_ERROR)
@@ -253,7 +254,7 @@ def run(
         raise _fail(exc.message, ExitCode.RUNTIME_ERROR) from exc
     _summary(result, paths)
     for warning in result.warnings[:5]:
-        err_console.print(f"[yellow]warning:[/] {warning.splitlines()[0][:200]}")
+        err_console.print(f"[yellow]warning:[/] {escape(warning.splitlines()[0][:200])}")
     raise typer.Exit(int(exit_code_for(result)))
 
 
@@ -353,7 +354,7 @@ def list_attacks(
     for col in ("id", "category", "severity", "vector", "title"):
         table.add_column(col)
     for c in cases:
-        table.add_row(c.id, c.category.value, c.severity.value, c.vector.value, c.title)
+        table.add_row(c.id, c.category.value, c.severity.value, c.vector.value, escape(c.title))
     console.print(table)
 
 
@@ -373,9 +374,9 @@ def lint_datasets(
         table.add_row(key, str(value))
     console.print(table)
     for warning in report_.warnings:
-        err_console.print(f"[yellow]warning:[/] {warning}")
+        err_console.print(f"[yellow]warning:[/] {escape(warning)}")
     for error in report_.errors:
-        err_console.print(f"[red]error:[/] {error}")
+        err_console.print(f"[red]error:[/] {escape(error)}")
     if not report_.ok:
         raise typer.Exit(1)
     console.print("[green]datasets OK[/]")
@@ -401,7 +402,7 @@ def calibrate_judge(
         raise _fail("--judge must be mock, anthropic or openai", ExitCode.CONFIG_ERROR)
     try:
         examples = load_gold_set(gold)
-        judge_impl = build_judge(JudgeConfig(provider=judge, model=model), offline=False)  # type: ignore[arg-type]
+        judge_impl = build_judge(JudgeConfig(provider=judge, model=model), offline=False)
     except (DatasetError, ConfigError) as exc:
         raise _fail(exc.message, ExitCode.CONFIG_ERROR) from exc
     result = asyncio.run(calibrate(judge_impl, examples))

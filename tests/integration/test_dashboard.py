@@ -11,15 +11,15 @@ import pytest
 
 pytest.importorskip("fastapi")
 
-from fastapi.testclient import TestClient  # noqa: E402
+from fastapi.testclient import TestClient
 
-from agentguard.config.loader import parse_config  # noqa: E402
-from agentguard.core.runner import RunOptions, Runner  # noqa: E402
-from agentguard.core.types import RunResult, utcnow  # noqa: E402
-from agentguard.dashboard.app import create_app, trend_points  # noqa: E402
-from agentguard.storage.db import Database  # noqa: E402
-from agentguard.storage.models import RunRow  # noqa: E402
-from agentguard.version import __version__  # noqa: E402
+from agentguard.config.loader import parse_config
+from agentguard.core.runner import Runner, RunOptions
+from agentguard.core.types import RunResult, utcnow
+from agentguard.dashboard.app import create_app, trend_points
+from agentguard.storage.db import Database
+from agentguard.storage.models import RunRow
+from agentguard.version import __version__
 
 ROOT = Path(__file__).resolve().parents[2]
 CASES = ["PI-DIR-001", "SPL-001", "SPL-002"]
@@ -173,7 +173,8 @@ def test_compare_full_and_partial(client: TestClient, populated: Populated) -> N
     assert full.status_code == 200
     assert "<html" in full.text.lower()
     assert f"{a} → {b}" in full.text
-    assert "dash-vulnerable" in full.text and "dash-hardened" in full.text
+    assert "dash-vulnerable" in full.text
+    assert "dash-hardened" in full.text
     assert "SYS_PROMPT_LEAK" in full.text
     assert "Fixed:" in full.text
 

@@ -10,19 +10,19 @@ import pytest
 
 pytest.importorskip("mcp")
 
-import agentguard.targets.mcp as mcp_module  # noqa: E402
-from agentguard.config.loader import parse_config  # noqa: E402
-from agentguard.config.models import TargetConfig  # noqa: E402
-from agentguard.core.errors import ConfigError, TargetError  # noqa: E402
-from agentguard.core.runner import RunOptions, Runner  # noqa: E402
-from agentguard.core.types import AttackCategory, CaseStatus  # noqa: E402
-from agentguard.harness.sandbox import ToolSandbox  # noqa: E402
-from agentguard.llm.base import BaseLLM, LLMMessage, LLMResponse, LLMToolCall, LLMToolSpec  # noqa: E402
-from agentguard.targets.base import TargetContext  # noqa: E402
-from agentguard.targets.mcp import MCPTarget, _result_text, mcp_available  # noqa: E402
-from agentguard.targets.registry import build_target  # noqa: E402
+import agentguard.targets.mcp as mcp_module
+from agentguard.config.loader import parse_config
+from agentguard.config.models import TargetConfig
+from agentguard.core.errors import ConfigError, TargetError
+from agentguard.core.runner import Runner, RunOptions
+from agentguard.core.types import AttackCategory, CaseStatus
+from agentguard.harness.sandbox import ToolSandbox
+from agentguard.llm.base import BaseLLM, LLMMessage, LLMResponse, LLMToolCall, LLMToolSpec
+from agentguard.targets.base import TargetContext
+from agentguard.targets.mcp import MCPTarget, _result_text, mcp_available
+from agentguard.targets.registry import build_target
 
-from .conftest import ROOT  # noqa: E402
+from .conftest import ROOT
 
 SERVER = "examples/targets/mcp_demo_server.py"
 DEMO_SECRET = "AG-CANARY-0d3e40c5fa1bd1ea"

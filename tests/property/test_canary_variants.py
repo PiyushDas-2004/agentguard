@@ -31,9 +31,7 @@ def _compact(text: str) -> str:
     sep1=separators,
     sep2=separators,
 )
-def test_variant_found_in_random_text(
-    token: str, variant: str, before: str, after: str, sep1: str, sep2: str
-) -> None:
+def test_variant_found_in_random_text(token: str, variant: str, before: str, after: str, sep1: str, sep2: str) -> None:
     encoded = canary_variants(token)[variant]
     text = f"{before}{sep1}{encoded}{sep2}{after}"
     hits = find_canaries(text, [token])

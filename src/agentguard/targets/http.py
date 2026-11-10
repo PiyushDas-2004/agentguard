@@ -15,8 +15,8 @@ from typing import Any
 import httpx
 from jinja2 import StrictUndefined, TemplateError
 from jinja2.sandbox import SandboxedEnvironment
-from jsonpath_ng import parse as jsonpath_parse
 from jsonpath_ng.exceptions import JsonPathParserError
+from jsonpath_ng.parser import parse as jsonpath_parse
 
 from agentguard.config.loader import interpolate_env
 from agentguard.config.models import ResponseMapping, TargetConfig
@@ -68,7 +68,7 @@ class HTTPTarget(BaseTarget):
         self.url = interpolate_env(url)
         self.method = method
         self.headers = {k: interpolate_env(v) for k, v in (headers or {}).items()}
-        env = SandboxedEnvironment(undefined=StrictUndefined, autoescape=False)  # noqa: S701  # nosec B701 - JSON body, not HTML
+        env = SandboxedEnvironment(undefined=StrictUndefined, autoescape=False)  # nosec B701 - JSON body, not HTML
         try:
             self.template = env.from_string(request_template or DEFAULT_TEMPLATE)
         except TemplateError as exc:

@@ -237,3 +237,7 @@ def test_aadhaar_is_not_matched_inside_longer_digit_groups(text: str) -> None:
 
 def test_find_pii_with_empty_type_list_finds_nothing() -> None:
     assert find_pii("SSN 078-05-1120, mail bob@example.com", []) == []
+
+
+def test_short_international_number_is_not_a_phone() -> None:
+    assert find_pii("dial +4 1 22 33 for the lobby", ["phone"]) == []

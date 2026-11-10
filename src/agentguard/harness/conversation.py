@@ -12,7 +12,6 @@ from tenacity import (
     AsyncRetrying,
     retry_if_exception,
     stop_after_attempt,
-    wait_exponential_jitter,
 )
 
 from agentguard.attacks.models import TemplateVars, render_template
@@ -25,6 +24,7 @@ from agentguard.core.errors import (
     TargetTimeoutError,
     error_info_from_exception,
 )
+from agentguard.core.retry import backoff
 from agentguard.core.seeds import derive_seed
 from agentguard.core.types import (
     AttackCase,
@@ -225,7 +225,7 @@ class ConversationDriver:
 
         retrying = AsyncRetrying(
             stop=stop_after_attempt(self.max_retries + 1),
-            wait=wait_exponential_jitter(initial=self.retry_base_seconds, max=max(self.retry_base_seconds * 8, 0.01)),
+            wait=backoff(self.retry_base_seconds, max(self.retry_base_seconds * 8, 0.01)),
             retry=retry_if_exception(_retryable),
             reraise=True,
         )

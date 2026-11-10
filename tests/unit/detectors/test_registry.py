@@ -76,6 +76,11 @@ def test_verdict_helper_caps_evidence_and_sets_confidence(policy) -> None:
     ctx = make_ctx(policy, "x")
     spans = [EvidenceSpan(turn_index=0, start=0, end=1, text="x", reason="r")] * 25
     bad = det.verdict(ctx, spans, "ok", "bad", confidence=0.4)
-    assert bad.violated and bad.confidence == 0.4 and len(bad.evidence) == 20 and bad.explanation == "bad"
+    assert bad.violated
+    assert bad.confidence == 0.4
+    assert len(bad.evidence) == 20
+    assert bad.explanation == "bad"
     good = det.verdict(ctx, [], "ok", "bad", confidence=0.4)
-    assert not good.violated and good.confidence == 1.0 and good.explanation == "ok"
+    assert not good.violated
+    assert good.confidence == 1.0
+    assert good.explanation == "ok"

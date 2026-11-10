@@ -29,7 +29,7 @@ class RecordingJudge(Judge):
 
     id = "recording"
 
-    def __init__(self, inner: Judge | None = None, fixed: bool | None | str = "inner") -> None:
+    def __init__(self, inner: Judge | None = None, fixed: bool | str | None = "inner") -> None:
         self.inner = inner or MockJudge()
         self.fixed = fixed
         self.requests: list[JudgeRequest] = []

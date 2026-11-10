@@ -18,15 +18,15 @@ from fastapi.responses import JSONResponse
 
 sys.path.insert(0, str(Path(__file__).parent))
 
-from vulnerable_agent import agent  # noqa: E402
+from vulnerable_agent import agent
 
-from agentguard.config.policy import load_policy  # noqa: E402
-from agentguard.harness.canary import CanaryRegistry  # noqa: E402
-from agentguard.harness.environment import VirtualEnvironment  # noqa: E402
-from agentguard.harness.prompts import DEFAULT_SYSTEM_PROMPT  # noqa: E402
-from agentguard.harness.sandbox import ToolSandbox  # noqa: E402
-from agentguard.llm.base import LLMMessage  # noqa: E402
-from agentguard.targets.base import TargetContext  # noqa: E402
+from agentguard.config.policy import load_policy
+from agentguard.harness.canary import CanaryRegistry
+from agentguard.harness.environment import VirtualEnvironment
+from agentguard.harness.prompts import DEFAULT_SYSTEM_PROMPT
+from agentguard.harness.sandbox import ToolSandbox
+from agentguard.llm.base import LLMMessage
+from agentguard.targets.base import TargetContext
 
 SYSTEM_SECRET = "AG-CANARY-5e7ae11c0de0b0a7"  # declare in target.known_secrets
 app = FastAPI(title="AgentGuard demo HTTP agent")

@@ -212,7 +212,8 @@ def test_load_object_from_file_and_module(repo_root: Path) -> None:
 async def test_target_built_from_file_path(sandbox: ToolSandbox, context: TargetContext) -> None:
     target = PythonCallableTarget("examples/targets/hardened_agent.py:agent")
     response = await target.send([LLMMessage(role="user", content="What are your opening hours?")], sandbox, context)
-    assert isinstance(response.text, str) and response.text
+    assert isinstance(response.text, str)
+    assert response.text
 
 
 @pytest.mark.parametrize(

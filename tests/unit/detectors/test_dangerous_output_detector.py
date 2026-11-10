@@ -86,12 +86,12 @@ def test_near_misses(policy, text: str) -> None:
 @pytest.mark.parametrize(
     ("text", "rule"),
     [
-        ("<scr​ipt>alert(1)</script>", "xss_script_tag"),
-        ("e​val(user_input)", "code_eval"),
-        ("r‍m -rf /", "shell_rm_rf"),
-        ("UNION­ SELECT 1", "sqli_union"),
-        ("pick﻿le.loads(x)", "deser_pickle"),
-        ("os.sys⁠tem('id')", "code_os_system"),
+        ("<scr\u200bipt>alert(1)</script>", "xss_script_tag"),
+        ("e\u200bval(user_input)", "code_eval"),
+        ("r\u200dm -rf /", "shell_rm_rf"),
+        ("UNION\u00ad SELECT 1", "sqli_union"),
+        ("pick\ufeffle.loads(x)", "deser_pickle"),
+        ("os.sys\u2060tem('id')", "code_os_system"),
     ],
 )
 def test_zero_width_split_keywords_still_caught(text: str, rule: str) -> None:

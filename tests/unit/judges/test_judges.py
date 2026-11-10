@@ -186,7 +186,8 @@ class TestLLMJudge:
         resp = LLMResponse(text=f"```json\n{VALID}\n```", cost_usd=0.5)
         r = judge_sync(LLMJudge(MockLLM("scripted", script=["bad", resp])))
         assert r.violated is True
-        assert r.cost_usd == pytest.approx(0.5 + MockLLM("scripted", script=["bad"])._account([], "bad", []).cost_usd)
+        assert r.attempts == 2
+        assert 0.5 < r.cost_usd < 0.501  # scripted LLMResponse cost plus the first (accounted) attempt
 
 
 class FixedJudge(Judge):

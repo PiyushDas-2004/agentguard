@@ -219,7 +219,7 @@ async def run_meta_validation(
     progress: Callable[[str], None] | None = None,
 ) -> MetaValidationResult:
     """Run the security suite against each ground-truth agent and score the predictions."""
-    from agentguard.core.runner import RunOptions, Runner
+    from agentguard.core.runner import Runner, RunOptions
 
     truth = load_ground_truth(ground_truth_path)
     results: dict[str, RunResult] = {}

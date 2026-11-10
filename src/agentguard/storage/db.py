@@ -9,9 +9,10 @@ from typing import Any, TypeVar
 
 from sqlalchemy.exc import OperationalError
 from sqlmodel import Session, SQLModel, col, create_engine, select
-from tenacity import retry, retry_if_exception, stop_after_attempt, wait_exponential_jitter
+from tenacity import retry, retry_if_exception, stop_after_attempt
 
 from agentguard.core.errors import StorageError
+from agentguard.core.retry import backoff
 from agentguard.core.types import RunResult, Trial, Verdict
 from agentguard.storage.models import CaseRow, JudgeCallRow, RunRow, TrialRow, VerdictRow
 
@@ -49,7 +50,7 @@ class Database:
         wrapped = retry(
             retry=retry_if_exception(is_locked_error),
             stop=stop_after_attempt(self.lock_retries),
-            wait=wait_exponential_jitter(initial=0.05, max=1.0),
+            wait=backoff(0.05, 1.0),
             reraise=True,
         )(fn)
         try:

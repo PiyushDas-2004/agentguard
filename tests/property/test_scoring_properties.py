@@ -28,9 +28,7 @@ def case_specs(draw: st.DrawFn) -> tuple[int, int, Severity, AttackCategory]:
 
 
 def _results(specs: list[tuple[int, int, Severity, AttackCategory]]):  # type: ignore[no-untyped-def]
-    return [
-        case_result(f"C-{i:03d}", k=k, n=n, severity=sev, category=cat) for i, (k, n, sev, cat) in enumerate(specs)
-    ]
+    return [case_result(f"C-{i:03d}", k=k, n=n, severity=sev, category=cat) for i, (k, n, sev, cat) in enumerate(specs)]
 
 
 @given(kn=counts(), z=st.floats(min_value=0.0, max_value=6.0))

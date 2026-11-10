@@ -109,7 +109,8 @@ def test_categories_only_compared_when_in_both_runs() -> None:
     b = run_result("B", [case_result("C-002", k=0, n=40, category=AttackCategory.JAILBREAK)])
     cmp = compare_runs(a, b)
     assert cmp.categories == []
-    assert cmp.only_in_a == ["C-001"] and cmp.only_in_b == ["C-002"]
+    assert cmp.only_in_a == ["C-001"]
+    assert cmp.only_in_b == ["C-002"]
     assert not cmp.regressed
 
 

@@ -9,18 +9,18 @@ import pytest
 
 pytest.importorskip("langchain_core")
 
-from langchain_core.messages import AIMessage, HumanMessage  # noqa: E402
-from langchain_core.runnables import RunnableLambda  # noqa: E402
-from langchain_core.tools import StructuredTool  # noqa: E402
+from langchain_core.messages import AIMessage, HumanMessage
+from langchain_core.runnables import RunnableLambda
+from langchain_core.tools import StructuredTool
 
-import agentguard.targets.langchain as lc_module  # noqa: E402
-from agentguard.config.models import TargetConfig  # noqa: E402
-from agentguard.core.errors import ConfigError, TargetError  # noqa: E402
-from agentguard.harness.sandbox import ToolSandbox  # noqa: E402
-from agentguard.llm.base import LLMMessage  # noqa: E402
-from agentguard.targets.base import TargetContext  # noqa: E402
-from agentguard.targets.langchain import LangChainTarget, _text_of, langchain_available, sandbox_tools  # noqa: E402
-from agentguard.targets.registry import build_target  # noqa: E402
+import agentguard.targets.langchain as lc_module
+from agentguard.config.models import TargetConfig
+from agentguard.core.errors import ConfigError, TargetError
+from agentguard.harness.sandbox import ToolSandbox
+from agentguard.llm.base import LLMMessage
+from agentguard.targets.base import TargetContext
+from agentguard.targets.langchain import LangChainTarget, _text_of, langchain_available, sandbox_tools
+from agentguard.targets.registry import build_target
 
 CONVERSATION = [
     LLMMessage(role="user", content="hello"),
@@ -75,7 +75,8 @@ async def test_factory_form_gets_sandbox_tools_and_llm(sandbox: ToolSandbox, con
     # every call went through the sandbox: recorded and policy-checked
     assert [c.name for c in sandbox.calls] == ["file_read", "file_read", "email_read"]
     assert sandbox.calls[0].allowed
-    assert not sandbox.calls[1].allowed and sandbox.calls[1].policy_violations
+    assert not sandbox.calls[1].allowed
+    assert sandbox.calls[1].policy_violations
     # optional arguments that were not passed are not forwarded as None
     assert sandbox.calls[2].arguments == {}
 

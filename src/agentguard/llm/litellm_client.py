@@ -11,9 +11,10 @@ import os
 import time
 from typing import Any
 
-from tenacity import AsyncRetrying, retry_if_exception, stop_after_attempt, wait_exponential_jitter
+from tenacity import AsyncRetrying, retry_if_exception, stop_after_attempt
 
 from agentguard.core.errors import ConfigError, TargetError
+from agentguard.core.retry import backoff
 from agentguard.llm.base import BaseLLM, LLMMessage, LLMResponse, LLMToolCall, LLMToolSpec
 
 __all__ = ["PROVIDER_KEYS", "LiteLLMClient", "is_retryable_llm_error"]
@@ -146,7 +147,7 @@ class LiteLLMClient(BaseLLM):
         started = time.perf_counter()
         retrying = AsyncRetrying(
             stop=stop_after_attempt(self.max_retries + 1),
-            wait=wait_exponential_jitter(initial=1.0, max=30.0),
+            wait=backoff(1.0, 30.0),
             retry=retry_if_exception(is_retryable_llm_error),
             reraise=True,
         )
