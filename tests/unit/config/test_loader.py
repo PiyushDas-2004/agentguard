@@ -6,6 +6,7 @@ from pathlib import Path
 
 import pytest
 import yaml
+from pydantic import BaseModel, ValidationError
 
 from agentguard.config.loader import (
     config_hash,
@@ -156,9 +157,12 @@ class TestLoadConfig:
         with pytest.raises(ConfigError) as info:
             parse_config(_with(run={"concurrency": "many", "otel": "maybe", "timeout_seconds": "x"}))
         msg = str(info.value)
-        assert "run.concurrency:" in msg and "use an integer" in msg
-        assert "run.otel:" in msg and "use true or false" in msg
-        assert "run.timeout_seconds:" in msg and "use a number" in msg
+        assert "run.concurrency:" in msg
+        assert "use an integer" in msg
+        assert "run.otel:" in msg
+        assert "use true or false" in msg
+        assert "run.timeout_seconds:" in msg
+        assert "use a number" in msg
 
     def test_gt_lt_messages(self) -> None:
         with pytest.raises(ConfigError) as info:
@@ -181,7 +185,8 @@ class TestLoadConfig:
             parse_config(_with(run=["x"], plugins="p"))
         msg = str(info.value)
         assert "run:" in msg
-        assert "plugins:" in msg and "use a YAML list" in msg
+        assert "plugins:" in msg
+        assert "use a YAML list" in msg
 
     def test_string_type_hint(self) -> None:
         with pytest.raises(ConfigError) as info:
@@ -206,35 +211,28 @@ class TestLoadConfig:
 
 class TestFormatValidationError:
     def test_prefix_and_root(self) -> None:
-        from pydantic import ValidationError
-
-        try:
+        with pytest.raises(ValidationError) as info:
             MutationConfig.model_validate({"per_case": 99})
-        except ValidationError as exc:
-            msg = format_validation_error(exc, prefix="x.y", origin="o.yaml")
+        msg = format_validation_error(info.value, prefix="x.y", origin="o.yaml")
         assert msg.startswith("invalid configuration in o.yaml:")
         assert "x.y.per_case: must be <= 20 (got 99)" in msg
 
     def test_root_level_error(self) -> None:
-        from pydantic import ValidationError
-
-        try:
+        with pytest.raises(ValidationError) as info:
             MutationConfig.model_validate("nope")
-        except ValidationError as exc:
-            assert "<root>:" in format_validation_error(exc)
-            assert "x:" in format_validation_error(exc, prefix="x")
+        assert "<root>:" in format_validation_error(info.value)
+        assert "x:" in format_validation_error(info.value, prefix="x")
 
-    def test_hint_with_missing_ctx_key_is_skipped(self) -> None:
-        from pydantic import BaseModel, ValidationError
-
+    def test_int_parsing_hint(self) -> None:
         class M(BaseModel):
             v: int
 
-        try:
+        with pytest.raises(ValidationError) as info:
             M.model_validate({"v": "abc"})
-        except ValidationError as exc:
-            msg = format_validation_error(exc)
-        assert "v:" in msg and "use an integer" in msg
+        msg = format_validation_error(info.value)
+        assert "v:" in msg
+        assert "(got 'abc')" in msg
+        assert "use an integer" in msg
 
 
 class TestInterpolateEnv:
@@ -319,3 +317,12 @@ class TestConfigHash:
 
         expected = hashlib.sha256(json.dumps(cfg.model_dump(mode="json"), sort_keys=True).encode()).hexdigest()[:16]
         assert config_hash(cfg) == expected
+
+
+def test_model_defaults() -> None:
+    from agentguard.config.models import AdaptiveConfig, QualitySuiteConfig
+
+    assert QualitySuiteConfig().backends == ["builtin"]
+    assert AdaptiveConfig().attacker.profile == "attacker"
+    assert MutationConfig().transforms[-1] == "translate_mock"
+    assert "paraphrase" not in MutationConfig().transforms

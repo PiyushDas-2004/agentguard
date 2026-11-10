@@ -2,7 +2,7 @@
 """Load test: many trials through the real Runner against a mock Python target.
 
 Runs ``--trials`` trials (default 1,000) at ``--concurrency`` (default 32) with the run's
-TokenBucket set to ``--rate`` trials/s (default 200) and checks:
+TokenBucket set to ``--rate`` trials/s (default 100) and checks:
 
   * achieved request rate within ``--tolerance`` (default 5%) of the configured rate,
   * no lost trials (every planned trial is recorded in the result, the database and transcripts),
@@ -10,6 +10,11 @@ TokenBucket set to ``--rate`` trials/s (default 200) and checks:
   * peak RSS growth below ``--max-rss-mb`` (default 300 MB), sampled with psutil.
 
 Prints throughput, latency p50/p95 (per target call and per trial), achieved rate and RSS growth.
+
+Why 100/s: every trial builds a fresh seeded world (virtual FS/DB, canaries, BM25 index) and runs
+detectors on the event loop, about 6 ms of CPU per trial, so one process tops out at ~160
+trials/s unthrottled (measure with ``--rate 0``). A limit above that capacity cannot be "achieved"
+by any limiter; 100/s keeps the check about the rate limiter rather than CPU saturation.
 
 Usage: uv run python scripts/load_test.py --trials 1000 --concurrency 32 --rate 200
 """
@@ -84,7 +89,7 @@ def build_config(tmp: Path, trials: int, concurrency: int, rate: float, cases_n:
 
 async def run_load(args: argparse.Namespace) -> int:
     """Execute the load test and return the exit code."""
-    from agentguard.core.runner import RunOptions, Runner
+    from agentguard.core.runner import Runner, RunOptions
     from agentguard.storage.transcripts import TranscriptStore
     from agentguard.targets.python_callable import PythonCallableTarget
 
@@ -148,26 +153,26 @@ async def run_load(args: argparse.Namespace) -> int:
     span = starts[-1] - starts[0] if len(starts) > 1 else 0.0
     achieved = (len(starts) - 1) / span if span else 0.0
     trial_latencies = [
-        t.latency_ms
-        for c in result.cases
-        for s in c.samples
-        for t in s.transcript.turns
-        if t.role.value == "assistant"
+        t.latency_ms for c in result.cases for s in c.samples for t in s.transcript.turns if t.role.value == "assistant"
     ]
     rss_growth_mb = (max(rss_samples) - rss_before) / 2**20
-    deviation = abs(achieved - args.rate) / args.rate
+    deviation = abs(achieved - args.rate) / args.rate if args.rate > 0 else 0.0
 
     print(f"load_test: {expected} trials · concurrency {args.concurrency} · rate limit {args.rate:g}/s")
     print(f"  wall time            {wall:8.2f} s (run incl. setup/aggregation)")
     print(f"  throughput           {len(completions) / wall:8.1f} trials/s (completed / wall)")
     print(f"  achieved call rate   {achieved:8.1f} /s (target {args.rate:g}/s, deviation {deviation:.1%})")
-    print(f"  target call latency  p50 {percentile(call_latencies, 50):6.1f} ms · p95 {percentile(call_latencies, 95):6.1f} ms")
+    print(
+        f"  target call latency  p50 {percentile(call_latencies, 50):6.1f} ms · p95 {percentile(call_latencies, 95):6.1f} ms"
+    )
     print(
         f"  recorded turn latency p50 {result.performance.latency_p50_ms:6.1f} ms · "
         f"p95 {result.performance.latency_p95_ms:6.1f} ms ({len(trial_latencies)} embedded samples)"
     )
     print(f"  peak in-flight       {peak_in_flight:8d} (limit {args.concurrency})")
-    print(f"  RSS                  before {rss_before / 2**20:.1f} MB · peak {max(rss_samples) / 2**20:.1f} MB · growth {rss_growth_mb:.1f} MB")
+    print(
+        f"  RSS                  before {rss_before / 2**20:.1f} MB · peak {max(rss_samples) / 2**20:.1f} MB · growth {rss_growth_mb:.1f} MB"
+    )
     print(
         f"  trials               planned {expected} · target calls {len(starts)} · result {result.total_trials} · "
         f"errors {result.total_errors} · db rows {stored_rows} · transcripts {stored_transcripts}"
@@ -199,7 +204,7 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--trials", type=int, default=1000)
     parser.add_argument("--concurrency", type=int, default=32)
-    parser.add_argument("--rate", type=float, default=200.0, help="TokenBucket rate (trials/s)")
+    parser.add_argument("--rate", type=float, default=100.0, help="TokenBucket rate (trials/s); see module docstring")
     parser.add_argument("--cases", type=int, default=100, help="synthetic cases (trials are split evenly)")
     parser.add_argument("--tolerance", type=float, default=0.05)
     parser.add_argument("--max-rss-mb", type=float, default=300.0)

@@ -146,7 +146,7 @@ def render_html(result: RunResult) -> str:
                 and c.seed_violation_rate is not None
                 and c.mutated_violation_rate > c.seed_violation_rate
             ),
-            key=lambda c: c.seed_violation_rate - (c.mutated_violation_rate or 0),
+            key=lambda c: (c.seed_violation_rate or 0.0) - (c.mutated_violation_rate or 0.0),
         )[:10],
     }
     return template.render(

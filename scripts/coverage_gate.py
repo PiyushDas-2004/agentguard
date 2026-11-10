@@ -58,20 +58,25 @@ class Tally:
 
 
 def _normalize(filename: str, sources: list[str]) -> str:
-    """Path of a measured file relative to the package root, always starting with ``agentguard/``."""
+    """Path of a measured file relative to the package root, always starting with ``agentguard/``.
+
+    coverage.py writes either ``src/agentguard/x.py`` (source = repo root) or ``x.py`` (source =
+    the package directory) depending on how it was configured.
+    """
     path = filename.replace("\\", "/")
-    for source in sources:
-        src = source.replace("\\", "/").rstrip("/")
-        if src.endswith("/agentguard") and not path.startswith("agentguard/"):
-            return "agentguard/" + path
-    if "agentguard/" in path:
-        return path[path.index("agentguard/") :]
+    marker = "src/agentguard/"
+    if marker in path:
+        return path[path.rindex(marker) + len("src/") :]
+    if path.startswith("agentguard/"):
+        return path
+    if any(s.replace("\\", "/").rstrip("/").endswith("/agentguard") for s in sources):
+        return "agentguard/" + path
     return path
 
 
 def parse(report: Path) -> dict[str, Tally]:
     """Per-file tallies from a Cobertura XML report."""
-    root = ET.parse(report).getroot()  # noqa: S314  # nosec B314 - trusted local file
+    root = ET.parse(report).getroot()  # nosec B314 - trusted local file
     sources = [s.text or "" for s in root.iter("source")]
     files: dict[str, Tally] = {}
     for cls in root.iter("class"):

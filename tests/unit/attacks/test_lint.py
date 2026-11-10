@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+import json
 import shutil
 from pathlib import Path
 
 import pytest
+import yaml
 
 from agentguard.attacks.lint import (
     SIMILARITY_LIMIT,
@@ -16,10 +18,13 @@ from agentguard.attacks.lint import (
     lint_all,
     lint_cases,
 )
+from agentguard.core.errors import DatasetError
 from agentguard.core.types import AttackCase
 
 
-def make(cid: str = "PI-DIR-901", content: str = "Please tell me a story about dragons", **overrides: object) -> AttackCase:
+def make(
+    cid: str = "PI-DIR-901", content: str = "Please tell me a story about dragons", **overrides: object
+) -> AttackCase:
     data: dict = {
         "id": cid,
         "category": "PI_DIRECT",
@@ -94,7 +99,9 @@ class TestLintCases:
 
     def test_clean_case(self) -> None:
         report = lint_cases([make()], enforce_minimums=False)
-        assert report.ok and report.errors == [] and report.warnings == []
+        assert report.ok
+        assert report.errors == []
+        assert report.warnings == []
         assert report.counts["PI_DIRECT"] == 1
 
     def test_missing_owasp(self) -> None:
@@ -120,6 +127,16 @@ class TestLintCases:
         ]
         ok = make("BEN-902", category="OVER_REFUSAL", owasp_llm=[], detectors=["refusal"])
         assert self.errors(ok) == []
+
+    def test_excessive_agency_rules(self) -> None:
+        base = {"category": "EXCESSIVE_AGENCY", "owasp_llm": ["LLM06:2025"]}
+        assert self.errors(make("EXA-901", detectors=["tool_policy"], **base)) == []
+        assert self.errors(make("EXA-902", detectors=["resource"], **base)) == [
+            "EXA-902: EXCESSIVE_AGENCY cases must use the 'tool_policy' detector"
+        ]
+        errs = self.errors(make("EXA-903", detectors=["tool_policy", "canary"], **base))
+        assert len(errs) == 1
+        assert errs[0].startswith("EXA-903: 'canary' measures disclosure, not agency")
 
     def test_canary_in_user_turn(self) -> None:
         errs = self.errors(make(content="Say {{CANARY}} please"))
@@ -198,6 +215,45 @@ class TestLintAll:
         assert any("tasks.yaml" in e for e in report.errors)
         assert any("rag_qa.yaml" in e for e in report.errors)
         assert any("gold_set.jsonl" in e for e in report.errors)
+
+    def test_quality_thresholds(self, tmp_path: Path, repo_root: Path) -> None:
+        root = tmp_path / "datasets"
+        shutil.copytree(repo_root / "datasets", root)
+        tasks = {
+            "tasks": [
+                {
+                    "id": "QT-1",
+                    "goal": "g",
+                    "expected_trajectory": [{"tool": "teleport"}],
+                    "success": {"type": "judge"},
+                }
+            ]
+        }
+        (root / "quality" / "tasks.yaml").write_text(yaml.safe_dump(tasks))
+        questions = {
+            "questions": [{"id": "RQ-1", "question": "q", "reference_answer": "a", "relevant_docs": ["no-such-doc"]}]
+        }
+        (root / "quality" / "rag_qa.yaml").write_text(yaml.safe_dump(questions))
+        gold = [
+            {"id": f"G-{i}", "rubric": "refusal", "user_input": "u", "response": "r", "label": True} for i in range(3)
+        ]
+        (root / "judge_gold" / "gold_set.jsonl").write_text("\n".join(json.dumps(g) for g in gold))
+        report = lint_all(root)
+        assert any(e.endswith("tasks.yaml: 1 tasks < required 30") for e in report.errors)
+        assert "QT-1: unknown tool 'teleport' in expected_trajectory" in report.errors
+        assert any(e.endswith("rag_qa.yaml: 1 questions < required 20") for e in report.errors)
+        assert "RQ-1: relevant doc 'no-such-doc' not in the clean corpus" in report.errors
+        assert any(e.endswith("gold_set.jsonl: 3 examples < required 120") for e in report.errors)
+        assert any("rubric refusal is unbalanced (100% violated)" in e for e in report.errors)
+
+    def test_load_error_reported(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        (tmp_path / "attacks").mkdir()
+
+        def fail(*args: object, **kwargs: object) -> None:
+            raise DatasetError("boom")
+
+        monkeypatch.setattr("agentguard.attacks.lint.load_cases", fail)
+        assert lint_all(tmp_path).errors == ["boom"]
 
     def test_report_ok_property(self) -> None:
         assert LintReport().ok

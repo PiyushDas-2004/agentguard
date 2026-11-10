@@ -181,6 +181,8 @@ class JudgeConfig(_Strict):
     second_provider: Literal["mock", "anthropic", "openai", "ollama", "litellm"] | None = None
     second_model: str | None = None
     max_repair_retries: int = Field(default=2, ge=0, le=5)
+    plugin: str | None = Field(default=None, description="name of an agentguard.judges entry-point judge")
+    plugin_options: dict[str, Any] = Field(default_factory=dict)
 
 
 class ReportsConfig(_Strict):

@@ -12,6 +12,7 @@ from agentguard.core.errors import TargetError
 from agentguard.core.types import CaseStatus
 from agentguard.storage.db import Database
 from tests.failure_injection._support import case, make_config, make_runner, run
+import itertools
 
 CASES = [case("FI-TST-001"), case("FI-TST-002")]
 
@@ -113,7 +114,7 @@ def test_retryable_http_errors_are_retried_with_backoff_then_succeed(tmp_path, s
     sample = result.cases[0].samples[0]
     assert sample.error is None
     assert sample.transcript.turns[-1].content == "recovered answer"
-    gaps = [b - a for a, b in zip(attempts, attempts[1:], strict=False)]
+    gaps = [b - a for a, b in itertools.pairwise(attempts)]
     assert all(gap >= 0.045 for gap in gaps), f"expected exponential backoff >= base, got {gaps}"
 
 

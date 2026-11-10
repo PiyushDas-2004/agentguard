@@ -90,7 +90,8 @@ class TestLoadCases:
         f = write_pack(tmp_path / "a.yaml", ["just a string"])  # type: ignore[list-item]
         result = load_cases([f])
         assert result.cases == []
-        assert result.warnings and "cases" in result.warnings[0]
+        assert result.warnings
+        assert "cases" in result.warnings[0]
 
     def test_strict_raises_on_invalid_case(self, tmp_path: Path) -> None:
         f = write_pack(tmp_path / "a.yaml", [raw_case(id="bad id")])

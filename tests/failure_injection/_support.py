@@ -15,7 +15,7 @@ import yaml
 
 from agentguard.config.loader import parse_config
 from agentguard.config.models import AgentGuardConfig
-from agentguard.core.runner import RunOptions, Runner
+from agentguard.core.runner import Runner, RunOptions
 from agentguard.core.types import RunResult
 from agentguard.targets.python_callable import PythonCallableTarget
 
@@ -174,7 +174,8 @@ def load_script(name: str) -> Any:
     if module_name in sys.modules:
         return sys.modules[module_name]
     spec = importlib.util.spec_from_file_location(module_name, ROOT / "scripts" / f"{name}.py")
-    assert spec is not None and spec.loader is not None
+    assert spec is not None
+    assert spec.loader is not None
     module = importlib.util.module_from_spec(spec)
     sys.modules[module_name] = module
     spec.loader.exec_module(module)

@@ -8,7 +8,7 @@ import agentguard.core.runner as runner_module
 import agentguard.quality.suite as quality_suite
 from agentguard.config.models import JudgeConfig
 from agentguard.core.errors import BudgetExceededError
-from agentguard.core.runner import RunOptions, Runner, build_judge, git_sha, new_run_id, run_sync
+from agentguard.core.runner import Runner, RunOptions, build_judge, git_sha, new_run_id, run_sync
 from agentguard.core.types import AttackCategory
 from agentguard.judges.ensemble import EnsembleJudge
 from agentguard.judges.llm_judge import LLMJudge
@@ -70,7 +70,8 @@ def test_security_suite_disabled_with_quality(tmp_path):
         }
     )
     result = run_sync(Runner(config, RunOptions(offline=True), base_dir=ROOT))
-    assert result.cases == [] and result.quality is not None
+    assert result.cases == []
+    assert result.quality is not None
 
 
 def test_budget_exhausted_during_quality_suite_is_partial(tmp_path, monkeypatch):
@@ -80,7 +81,8 @@ def test_budget_exhausted_during_quality_suite_is_partial(tmp_path, monkeypatch)
     monkeypatch.setattr(quality_suite, "run_quality_suite", exhausted)
     config = demo_config(tmp_path, ["PI-DIR-001"], trials=1, mutations=False, quality=True)
     result = run(Runner(config, RunOptions(offline=True), base_dir=ROOT))
-    assert result.partial and result.abort_reason == "budget"
+    assert result.partial
+    assert result.abort_reason == "budget"
     assert result.total_trials == 1
     assert "budget exceeded" in result.warnings
 
@@ -89,7 +91,8 @@ def test_rate_limited_concurrent_run(tmp_path):
     cases = [case(f"FI-RTL-{i:03d}") for i in range(1, 9)]
     config = make_config(tmp_path, cases, run={"concurrency": 4, "rate_limit_per_second": 200})
     result = run(make_runner(config, lambda message: "fine"))
-    assert result.total_trials == 8 and result.total_errors == 0
+    assert result.total_trials == 8
+    assert result.total_errors == 0
 
 
 def test_flush_in_batches_of_fifty(tmp_path):

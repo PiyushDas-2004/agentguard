@@ -112,7 +112,7 @@ def test_rejoin_split_words_punctuation() -> None:
 
 
 def test_normalize_for_reading() -> None:
-    text = "ｉｇｎｏｒｅ" + "​" + "".join(HOMOGLYPHS.get(c, c) for c in " prompt")
+    text = "ｉｇｎｏｒｅ" + "\u200b" + "".join(HOMOGLYPHS.get(c, c) for c in " prompt")
     assert normalize_for_reading(text) == "ignore prompt"
 
 

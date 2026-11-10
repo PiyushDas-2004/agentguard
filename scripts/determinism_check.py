@@ -86,7 +86,7 @@ def run_once(
 ) -> dict[str, Any]:
     """Execute one offline run with isolated storage; return the result as JSON data."""
     from agentguard.config.loader import load_config
-    from agentguard.core.runner import RunOptions, Runner
+    from agentguard.core.runner import Runner, RunOptions
     from agentguard.core.types import AttackCategory
 
     config = load_config(config_path)

@@ -98,7 +98,8 @@ def test_budget_exceeded_mid_run_returns_partial_result(tmp_path):
     assert "Partial" in render_markdown(result) or "PARTIAL" in render_markdown(result)
     # Partial results are persisted.
     stored = Database(tmp_path / "agentguard.db").load_run(result.run_id)
-    assert stored.partial and stored.abort_reason == "budget"
+    assert stored.partial
+    assert stored.abort_reason == "budget"
     assert stored.total_trials == result.total_trials
 
 
@@ -121,7 +122,8 @@ def test_budget_exceeded_via_metered_target_llm(tmp_path):
     cases = [case(f"FI-BUD-{i:03d}") for i in range(1, 6)]
     config = make_config(tmp_path, cases, run={"max_cost_usd": 0.0000001, "trials_per_case": 2})
     result = run(make_runner(config, llm_agent))
-    assert result.partial and result.abort_reason == "budget"
+    assert result.partial
+    assert result.abort_reason == "budget"
     assert exit_code_for(result) == ExitCode.BUDGET_EXCEEDED
 
 

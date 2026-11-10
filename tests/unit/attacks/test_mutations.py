@@ -76,7 +76,7 @@ class TestTransforms:
             "translate_mock",
             "paraphrase",
         }
-        assert LIVE_ONLY == frozenset({"paraphrase"})
+        assert frozenset({"paraphrase"}) == LIVE_ONLY
         reversible = {n for n, t in TRANSFORMS.items() if t.reversible}
         assert reversible == {"base64", "rot13", "homoglyph", "zero_width", "wrapper_roleplay", "wrapper_json"}
 
@@ -118,14 +118,16 @@ class TestTransforms:
 
     def test_roleplay(self) -> None:
         out = apply_transform("wrapper_roleplay", "do x", 1)
-        assert "Morgan" in out and "<<<\ndo x\n>>>" in out
+        assert "Morgan" in out
+        assert "<<<\ndo x\n>>>" in out
         with pytest.raises(ValueError, match="not a roleplay"):
             decode_transform("wrapper_roleplay", "do x")
 
     def test_json(self) -> None:
         out = apply_transform("wrapper_json", "do x", 1)
         data = json.loads(out)
-        assert data["instruction"] == "do x" and data["role"] == "admin"
+        assert data["instruction"] == "do x"
+        assert data["role"] == "admin"
         assert 1000 <= data["task_id"] <= 9999
         with pytest.raises(ValueError, match="not a string"):
             decode_transform("wrapper_json", json.dumps({"instruction": 5}))

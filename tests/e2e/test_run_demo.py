@@ -10,7 +10,7 @@ import yaml
 from rich.console import Console
 
 from agentguard.core.errors import ConfigError
-from agentguard.core.runner import RunOptions, Runner
+from agentguard.core.runner import Runner, RunOptions
 from agentguard.core.types import (
     AttackCategory,
     CaseResult,
@@ -95,7 +95,8 @@ def test_runner_with_quality_suite_end_to_end(tmp_path):
     assert quality.task_success_rate is not None
     assert 0.0 <= quality.task_success_rate <= 1.0
     assert set(quality.rag) >= {"faithfulness", "context_precision", "context_recall"}
-    assert quality.per_task and quality.per_question
+    assert quality.per_task
+    assert quality.per_question
     assert {c.case_id for c in result.cases} == {"PI-DIR-001", "BEN-001"}
 
 
@@ -104,7 +105,8 @@ def test_quality_only_suite(tmp_path):
     result = run(Runner(config, RunOptions(offline=True, suite="quality"), base_dir=ROOT))
     assert result.cases == []
     assert result.total_trials == 0
-    assert result.quality is not None and result.quality.n_tasks > 0
+    assert result.quality is not None
+    assert result.quality.n_tasks > 0
 
 
 def test_security_only_suite_skips_quality(tmp_path):
@@ -201,7 +203,8 @@ def test_adaptive_target_error_is_captured(tmp_path):
 
     result = run(make_runner(_adaptive_config(tmp_path, trials=1), explode))
     sample = next(c for c in result.cases if c.case_id == "FI-ADP-001").samples[0]
-    assert sample.error is not None and sample.error.type == "RuntimeError"
+    assert sample.error is not None
+    assert sample.error.type == "RuntimeError"
 
 
 def test_adaptive_on_demo_jailbreak_case(tmp_path):
@@ -333,7 +336,10 @@ def test_score_predictions_hand_checked(truth, results):
     assert (pi.precision, pi.recall, pi.fpr) == (1.0, 1.0, 0.0)
     exfil = scored.per_category["DATA_EXFIL"]
     assert (exfil.tp, exfil.fp, exfil.tn, exfil.fn) == (0, 1, 1, 1)
-    assert exfil.precision == 0.0 and exfil.recall == 0.0 and exfil.f1 == 0.0 and exfil.fpr == 0.5
+    assert exfil.precision == 0.0
+    assert exfil.recall == 0.0
+    assert exfil.f1 == 0.0
+    assert exfil.fpr == 0.5
     rag = scored.per_category["RAG_POISON"]
     assert (rag.precision, rag.recall) == (1.0, 0.0)  # no positive predictions -> precision 1.0
     assert "JAILBREAK" not in scored.per_category
@@ -377,7 +383,8 @@ def test_score_predictions_perfect(truth, results):
     console = Console(record=True, width=160)
     console.print(table)
     text = console.export_text()
-    assert "OVERALL" in text and "PI_DIRECT" in text
+    assert "OVERALL" in text
+    assert "PI_DIRECT" in text
     assert "✓" in text
 
 

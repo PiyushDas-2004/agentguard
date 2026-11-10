@@ -81,6 +81,11 @@ def git_sha() -> str | None:
 def build_judge(config: JudgeConfig, *, offline: bool, budget: BudgetTracker | None = None) -> Judge:
     """Create the configured judge (MockJudge offline), optionally as a two-judge ensemble."""
 
+    if config.plugin:
+        from agentguard.plugins import load_judge
+
+        return load_judge(config.plugin, **config.plugin_options)
+
     def single(provider: str, model: str | None) -> Judge:
         if offline or provider == "mock":
             return MockJudge()
@@ -163,6 +168,21 @@ class Runner:
         """Whether every model call is forced onto the deterministic mocks."""
         return self.options.offline
 
+    def detector_registry(self) -> DetectorRegistry:
+        """Built-in detectors plus ``agentguard.detectors`` entry points and ``plugins:`` references."""
+        from agentguard.detectors.base import Detector
+        from agentguard.plugins import load_reference, register_detectors
+
+        registry = DetectorRegistry()
+        register_detectors(registry)
+        for reference in self.config.plugins:
+            obj = load_reference(reference)
+            if isinstance(obj, type) and issubclass(obj, Detector):
+                registry.register(obj)
+            else:
+                raise ConfigError(f"plugins: {reference!r} is not a Detector subclass")
+        return registry
+
     def load_policy(self) -> Policy:
         """Resolve and load the policy file."""
         source = self.config.policy
@@ -176,7 +196,10 @@ class Runner:
         if self.options.suite == "quality" or not security.enabled:
             return []
         strict = self.options.strict if self.options.strict is not None else self.config.run.strict_datasets
-        result = load_cases([self._path(p) for p in security.datasets], strict=strict)
+        from agentguard.plugins import attack_pack_paths
+
+        paths = [self._path(p) for p in security.datasets] + attack_pack_paths()
+        result = load_cases(paths, strict=strict)
         self.warnings.extend(result.warnings)
         categories = self.options.categories
         if categories is None and security.categories != "all":
@@ -256,7 +279,7 @@ class Runner:
         target = self._target or build_target(self.config.target)
         target_config = self.config.target
         judge = build_judge(self.config.judge, offline=self.offline, budget=self.budget)
-        evaluator = TrialEvaluator(DetectorRegistry(), judge)
+        evaluator = TrialEvaluator(self.detector_registry(), judge)
         driver = ConversationDriver(
             target,
             policy,
@@ -283,7 +306,11 @@ class Runner:
                 config_hash=config_hash(self.config),
             )
         )
-        limiter = TokenBucket(self.config.run.rate_limit_per_second) if self.config.run.rate_limit_per_second else None
+        rate = self.config.run.rate_limit_per_second
+        # A 100 ms burst lets the bucket catch up after event-loop stalls (synchronous world building
+        # or detectors); with burst 1 every stall loses tokens and the achieved rate falls well below
+        # the configured one. The long-run average still never exceeds ``rate``.
+        limiter = TokenBucket(rate, burst=max(1.0, rate * 0.1)) if rate else None
         scheduler: TrialScheduler = TrialScheduler(self.config.run.concurrency, limiter)
         total = len(specs)
         done = 0

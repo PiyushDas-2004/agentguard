@@ -138,6 +138,7 @@ class RagIndex:
     def __init__(self, documents: list[RagDocument]) -> None:
         self.documents = list(documents)
         corpus = [tokenize(d.title + " " + d.text) or ["empty"] for d in self.documents]
+        self._token_sets = [set(tokens) for tokens in corpus]
         self._bm25 = BM25Okapi(corpus) if corpus else None
 
     def add(self, document: RagDocument) -> RagIndex:
@@ -162,8 +163,9 @@ class RagIndex:
         if not tokens:
             return []
         scores = self._bm25.get_scores(tokens)
-        ranked = sorted(
-            range(len(self.documents)),
-            key=lambda i: (-round(float(scores[i]), 9), self.documents[i].doc_id),
-        )
-        return [self.documents[i] for i in ranked[:k] if scores[i] > 0]
+        query = set(tokens)
+        # BM25 IDF is negative for terms present in most documents of a tiny corpus, so relevance
+        # is "shares at least one query term", ranked by score (then id for determinism).
+        candidates = [i for i in range(len(self.documents)) if query & self._token_sets[i]]
+        ranked = sorted(candidates, key=lambda i: (-round(float(scores[i]), 9), self.documents[i].doc_id))
+        return [self.documents[i] for i in ranked[:k]]

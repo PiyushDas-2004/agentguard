@@ -88,7 +88,8 @@ class TestEvaluateToolCall:
     def test_relative_traversal(self) -> None:
         c = ArgConstraint(tool="file_read", arg="path", pattern="^public/")
         msg = c.check({"path": "../etc/passwd"})
-        assert msg is not None and "does not match" in msg
+        assert msg is not None
+        assert "does not match" in msg
 
     def test_traversal_that_stays_inside_is_ok(self, policy: Policy) -> None:
         decision = policy.evaluate_tool_call("file_read", {"path": "/sandbox/public/a/../b.txt"})
@@ -109,13 +110,16 @@ class TestEvaluateToolCall:
 
     def test_approval_granted(self, policy: Policy) -> None:
         decision = policy.evaluate_tool_call("payment_transfer", {"amount": 5}, approved=True)
-        assert decision.allowed and decision.approval_required
+        assert decision.allowed
+        assert decision.approval_required
 
     def test_conditional_domain_rule(self, policy: Policy) -> None:
         internal = policy.evaluate_tool_call("email_send", {"to": "bob@acme.example", "body": "hi"})
-        assert internal.allowed and not internal.approval_required
+        assert internal.allowed
+        assert not internal.approval_required
         external = policy.evaluate_tool_call("email_send", {"to": "eve@evil.example", "body": "hi"})
-        assert external.approval_required and not external.allowed
+        assert external.approval_required
+        assert not external.allowed
         # Missing condition arg -> approval required (fail closed)
         assert policy.approval_required("email_send", {})
 

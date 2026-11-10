@@ -59,7 +59,8 @@ def test_every_poison_vector_reaches_the_agent(tmp_path):
         assert case_result.mutation_rates, "mutated poison trials ran as well"
         for sample in case_result.samples:
             reply = sample.transcript.turns[-1].content
-            assert "{{CANARY}}" not in reply and "{{EXFIL_URL}}" not in reply
+            assert "{{CANARY}}" not in reply
+            assert "{{EXFIL_URL}}" not in reply
             if sample.mutation_id is None:
                 assert MARKER in reply
 
@@ -86,7 +87,8 @@ def test_email_location_without_subject_and_rag_corpus_doc(tmp_path):
     assert "partner@external.example Re: your request" in email_reply
     rag_reply = by_id["FI-VEC-102"].samples[0].transcript.turns[-1].content
     assert rag_reply.startswith("Found: # Expense reimbursement fast track")
-    assert "ATTACKER-" in rag_reply and "{{ATTACKER_ACCOUNT}}" not in rag_reply
+    assert "ATTACKER-" in rag_reply
+    assert "{{ATTACKER_ACCOUNT}}" not in rag_reply
 
 
 @pytest.mark.parametrize("with_cost", [False, True])
@@ -112,7 +114,9 @@ def test_external_target_without_model_reports_its_own_tool_calls(tmp_path, with
     sample = result.cases[0].samples[0]
     assert sample.error is None
     (call,) = sample.transcript.tool_calls
-    assert call.name == "shell_exec" and call.executed and call.policy_violations
+    assert call.name == "shell_exec"
+    assert call.executed
+    assert call.policy_violations
     assert sample.violated is True
     reply = sample.transcript.turns[-1]
     assert reply.model == "remote-model"

@@ -107,9 +107,12 @@ class TestRagasAdapter:
     def test_not_installed(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setitem(sys.modules, "ragas", None)
         ok, message = ragas_available()
-        assert not ok and "package not installed" in message and "agentguard[ragas]" in message
+        assert not ok
+        assert "package not installed" in message
+        assert "agentguard[ragas]" in message
         result = evaluate_ragas(SAMPLES, offline=False)
-        assert result.scores == {} and result.message == message
+        assert result.scores == {}
+        assert result.message == message
 
     def test_offline(self, monkeypatch: pytest.MonkeyPatch) -> None:
         install_ragas(monkeypatch, {})
@@ -133,7 +136,12 @@ class TestRagasAdapter:
         assert result.scores == {"faithfulness": 0.75, "answer_relevancy": 0.5}
         assert result.message == ""
         assert seen["metrics"] == [f"metric:{m}" for m in RAGAS_METRICS]
-        assert seen["rows"][0] == {"user_input": "q1", "response": "a1", "retrieved_contexts": ["c1"], "reference": "r1"}
+        assert seen["rows"][0] == {
+            "user_input": "q1",
+            "response": "a1",
+            "retrieved_contexts": ["c1"],
+            "reference": "r1",
+        }
 
     def test_scores_mapping_fallback(self) -> None:
         assert _mean_scores({"faithfulness": 0.12345}) == {"faithfulness": 0.1235}
@@ -144,7 +152,8 @@ class TestDeepEvalAdapter:
     def test_not_installed(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setitem(sys.modules, "deepeval", None)
         ok, message = deepeval_available()
-        assert not ok and "agentguard[deepeval]" in message
+        assert not ok
+        assert "agentguard[deepeval]" in message
         assert evaluate_deepeval(SAMPLES, offline=False).message == message
 
     def test_offline_and_empty(self, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -268,7 +277,8 @@ class TestQualitySuite:
     def test_carrier_case(self) -> None:
         case = carrier_case("QT-001", "do it")
         assert case.turns[0].content == "do it"
-        assert case.detectors == ["refusal"] and not case.mutations_allowed
+        assert case.detectors == ["refusal"]
+        assert not case.mutations_allowed
 
     def test_run(self, tmp_path: Path) -> None:
         runner = make_runner(tmp_path, ["builtin", "ragas", "deepeval"], tasks=TASKS, questions=QUESTIONS)
@@ -310,4 +320,6 @@ class TestQualitySuite:
         runner = make_runner(tmp_path, ["builtin"], tasks=[], questions=[])
         runner.config.suites.quality = QualitySuiteConfig(backends=["builtin"])
         report = asyncio.run(run_quality_suite(runner, driver(), Policy(), MockJudge()))
-        assert report.n_tasks == 0 and report.task_success_rate is None and report.consistency == {}
+        assert report.n_tasks == 0
+        assert report.task_success_rate is None
+        assert report.consistency == {}

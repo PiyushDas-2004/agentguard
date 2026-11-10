@@ -103,10 +103,12 @@ def find_near_duplicates(cases: list[AttackCase], limit: float = SIMILARITY_LIMI
     return pairs
 
 
-def lint_cases(cases: list[AttackCase], *, enforce_minimums: bool = True) -> LintReport:
-    """Lint already-loaded cases."""
+def lint_cases(
+    cases: list[AttackCase], *, enforce_minimums: bool = True, extra_detectors: set[str] | None = None
+) -> LintReport:
+    """Lint already-loaded cases (``extra_detectors`` adds plugin detector ids)."""
     report = LintReport()
-    known_detectors = DetectorRegistry().known()
+    known_detectors = DetectorRegistry().known() | (extra_detectors or set())
     for case in cases:
         where = f"{case.id}"
         if case.category != AttackCategory.OVER_REFUSAL and not case.owasp_llm:
@@ -252,7 +254,10 @@ def lint_all(root: str | Path = "datasets", *, enforce_minimums: bool = True) ->
         report.errors.append(str(exc))
         return report
     report.errors.extend(w for w in loaded.warnings)
-    case_report = lint_cases(loaded.cases, enforce_minimums=enforce_minimums)
+    from agentguard.plugins import register_detectors
+
+    plugin_detectors = set(register_detectors(DetectorRegistry()))
+    case_report = lint_cases(loaded.cases, enforce_minimums=enforce_minimums, extra_detectors=plugin_detectors)
     report.errors.extend(case_report.errors)
     report.warnings.extend(case_report.warnings)
     report.counts.update(case_report.counts)

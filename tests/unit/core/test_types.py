@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import asyncio
 from datetime import UTC, datetime
 
 import pytest
@@ -87,12 +86,15 @@ class TestAttackCaseValidators:
             AttackCase.model_validate(_case(vector="rag_document"))
 
     def test_poison_vector_must_match(self) -> None:
-        with pytest.raises(ValidationError, match="poison.vector must equal the case vector"):
+        with pytest.raises(ValidationError, match=r"poison\.vector must equal the case vector"):
             AttackCase.model_validate(_case(vector="rag_document", poison={"vector": "email_body", "content": "x"}))
 
     def test_poison_ok(self) -> None:
-        case = AttackCase.model_validate(_case(vector="rag_document", poison={"vector": "rag_document", "content": "x"}))
-        assert case.poison is not None and case.poison.vector == InjectionVector.rag_document
+        case = AttackCase.model_validate(
+            _case(vector="rag_document", poison={"vector": "rag_document", "content": "x"})
+        )
+        assert case.poison is not None
+        assert case.poison.vector == InjectionVector.rag_document
 
     def test_extra_key_forbidden(self) -> None:
         with pytest.raises(ValidationError):
@@ -221,7 +223,8 @@ class TestErrors:
         assert TargetTimeoutError("t").retryable
         assert not TargetTimeoutError("t", retryable=False).retryable
         err = TargetError("boom", status_code=503, retryable=True)
-        assert err.status_code == 503 and err.message == "boom"
+        assert err.status_code == 503
+        assert err.message == "boom"
 
     @pytest.mark.parametrize(
         ("exc", "retryable"),
@@ -231,7 +234,7 @@ class TestErrors:
             (TargetTimeoutError("slow"), True),
             (BudgetExceededError("cap"), False),
             (TimeoutError("t"), True),
-            (asyncio.TimeoutError(), True),
+            (TimeoutError(), True),
             (ConnectionResetError("r"), True),
             (ValueError("v"), False),
         ],

@@ -72,7 +72,13 @@ protected_spans = st.sampled_from(
 )
 
 
-@given(words, protected_spans, words, seeds, st.sampled_from(["leetspeak", "homoglyph", "zero_width", "token_split", "translate_mock"]))
+@given(
+    words,
+    protected_spans,
+    words,
+    seeds,
+    st.sampled_from(["leetspeak", "homoglyph", "zero_width", "token_split", "translate_mock"]),
+)
 def test_protected_span_survives(prefix: str, span: str, suffix: str, seed: int, name: str) -> None:
     text = f"{prefix} {span} {suffix}"
     assert span in apply_transform(name, text, seed)

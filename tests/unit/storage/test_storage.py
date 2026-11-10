@@ -124,14 +124,17 @@ class TestDatabase:
         rows = database.trial_rows("run-abc")
         assert {r.trial_index for r in rows} == {0, 1}
         by_index = {r.trial_index: r for r in rows}
-        assert by_index[0].violated is True and by_index[0].objective_met is True
-        assert by_index[1].error_type == "TargetError" and by_index[1].error_message == "boom"
+        assert by_index[0].violated is True
+        assert by_index[0].objective_met is True
+        assert by_index[1].error_type == "TargetError"
+        assert by_index[1].error_message == "boom"
         assert database.trial_rows("run-abc", case_id="OTHER") == []
         assert len(database.trial_rows("run-abc", case_id="PI-DIR-001")) == 2
 
         verdicts = database.verdict_rows(trial().trial_id)
         assert len(verdicts) == 1
-        assert verdicts[0]["detector_id"] == "canary" and verdicts[0]["violated"] is True
+        assert verdicts[0]["detector_id"] == "canary"
+        assert verdicts[0]["violated"] is True
         assert '"text": "leak"' in verdicts[0]["evidence_json"]
 
         database.save_judge_call(
@@ -156,7 +159,8 @@ class TestDatabase:
     def test_finish_without_start_and_partial(self, database: Database) -> None:
         database.finish_run(result("run-xyz", partial=True, abort_reason="budget"))
         (row,) = database.list_runs()
-        assert row.status == "partial" and row.partial
+        assert row.status == "partial"
+        assert row.partial
         assert database.load_run("run-xyz").abort_reason == "budget"
 
     def test_prefix_lookup(self, database: Database) -> None:
@@ -197,7 +201,7 @@ class TestLockedRetry:
         FlakySession.attempts = 0
         monkeypatch.setattr(db_module, "Session", FlakySession)
         # keep the backoff schedule out of the test's wall time (tenacity is not under test)
-        monkeypatch.setattr(db_module, "wait_exponential_jitter", lambda **_: tenacity.wait_none())
+        monkeypatch.setattr(db_module, "backoff", lambda *_a, **_k: tenacity.wait_none())
 
     def test_is_locked_error(self) -> None:
         assert is_locked_error(locked())
@@ -216,7 +220,7 @@ class TestLockedRetry:
     def test_gives_up(self, tmp_path: Path) -> None:
         database = Database(tmp_path / "x.db", lock_retries=2)
         FlakySession.failures = 100
-        with pytest.raises(StorageError, match="database error: .*database is locked"):
+        with pytest.raises(StorageError, match=r"database error: .*database is locked"):
             database.list_runs()
         assert FlakySession.attempts == 2
 

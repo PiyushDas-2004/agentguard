@@ -120,7 +120,8 @@ def test_sigint_cancels_cleanly_and_returns_partial_result(tmp_path):
     result = runner.result
     assert result is not None
     assert returned is None or returned is result
-    assert result.partial and result.abort_reason == "interrupted"
+    assert result.partial
+    assert result.abort_reason == "interrupted"
     assert result.total_trials == 2
 
 

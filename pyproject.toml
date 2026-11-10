@@ -171,6 +171,9 @@ exclude = ["tests", "mutants", "scripts", "docs"]
 verbose = 1
 
 [tool.mutmut]
-paths_to_mutate = ["src/agentguard/scoring/", "src/agentguard/detectors/"]
-tests_dir = ["tests/unit/"]
+# mutmut 3: copy the whole package (other subpackages are imported by the tests) but only
+# mutate scoring/ and detectors/; select the fast unit tests.
+source_paths = ["src/agentguard/"]
+only_mutate = ["src/agentguard/scoring/*", "src/agentguard/detectors/*"]
+pytest_add_cli_args_test_selection = ["tests/unit/"]
 also_copy = ["datasets/", "examples/"]

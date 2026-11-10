@@ -55,7 +55,11 @@ def ctx(
     if reply is not None:
         turns.append(TranscriptTurn(index=1, role=Role.assistant, content=reply, tokens_out=tokens))
     trial = Trial(
-        run_id="r", case_id="PI-DIR-901", trial_index=0, seed=1, transcript=Transcript(turns=turns, tool_calls=calls or [])
+        run_id="r",
+        case_id="PI-DIR-901",
+        trial_index=0,
+        seed=1,
+        transcript=Transcript(turns=turns, tool_calls=calls or []),
     )
     return DetectionContext(
         trial=trial,

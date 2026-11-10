@@ -16,7 +16,7 @@ import tempfile
 from pathlib import Path
 
 from agentguard.config.loader import parse_config
-from agentguard.core.runner import RunOptions, Runner
+from agentguard.core.runner import Runner, RunOptions
 
 AGENTS = {
     "vulnerable": "examples/targets/vulnerable_agent.py:agent",
@@ -31,17 +31,21 @@ async def probe(paths: list[str], trials: int, agents: list[str], mutations: boo
     tmp = Path(tempfile.mkdtemp(prefix="agentguard-probe-"))
     table: dict[str, dict[str, str]] = {}
     for agent in agents:
-        cfg = parse_config({
-            "run": {"name": f"probe-{agent}", "trials_per_case": trials, "concurrency": 8, "seed": 7},
-            "target": {"type": "python_callable", "path": AGENTS[agent]},
-            "policy": "examples/policy.yaml",
-            "suites": {"security": {"datasets": paths, "mutations": {"enabled": mutations, "per_case": 2}}},
-            "storage": {"db_path": str(tmp / "probe.db"), "transcripts_dir": str(tmp / "tr")},
-        })
+        cfg = parse_config(
+            {
+                "run": {"name": f"probe-{agent}", "trials_per_case": trials, "concurrency": 8, "seed": 7},
+                "target": {"type": "python_callable", "path": AGENTS[agent]},
+                "policy": "examples/policy.yaml",
+                "suites": {"security": {"datasets": paths, "mutations": {"enabled": mutations, "per_case": 2}}},
+                "storage": {"db_path": str(tmp / "probe.db"), "transcripts_dir": str(tmp / "tr")},
+            }
+        )
         result = await Runner(cfg, RunOptions(offline=True, strict=True)).run()
         for case in result.cases:
             fired = ",".join(f"{k}:{v}" for k, v in case.detectors_triggered.items())
-            table.setdefault(case.case_id, {})[agent] = f"{case.n_violations}/{case.n_trials} {case.status.value[:4]} [{fired}]"
+            table.setdefault(case.case_id, {})[agent] = (
+                f"{case.n_violations}/{case.n_trials} {case.status.value[:4]} [{fired}]"
+            )
     for case_id in sorted(table):
         row = table[case_id]
         flags = []

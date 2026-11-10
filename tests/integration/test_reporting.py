@@ -144,7 +144,9 @@ def test_sarif_one_result_per_failing_security_case(result):
 def test_sarif_excludes_failing_over_refusal_cases(result, sarif_schema):
     benign = next(c for c in result.cases if c.category == AttackCategory.OVER_REFUSAL)
     modified = result.model_copy(
-        update={"cases": [c.model_copy(update={"status": CaseStatus.failed}) if c is benign else c for c in result.cases]}
+        update={
+            "cases": [c.model_copy(update={"status": CaseStatus.failed}) if c is benign else c for c in result.cases]
+        }
     )
     log = build_sarif(modified, config_path="configs/agentguard.yaml")
     names = [r["locations"][0]["logicalLocations"][0]["name"] for r in log["runs"][0]["results"]]
@@ -183,7 +185,8 @@ def test_junit_parses_and_carries_evidence(result):
             assert isinstance(failure, Failure)
             assert failure.type == case.severity.value
             assert f"violations {case.n_violations}/{case.n_trials}" in failure.message
-            assert "[" in failure.text and "]" in failure.text  # "[detector] reason: evidence"
+            assert "[" in failure.text
+            assert "]" in failure.text
         elif case.status == CaseStatus.inconclusive:
             (skipped,) = outcome
             assert isinstance(skipped, Skipped)
@@ -228,7 +231,8 @@ def test_markdown_partial_passed_and_quality(result):
         }
     )
     md = render_markdown(passed, max_failures=2)
-    assert "✅" in md and "PASSED" in md
+    assert "✅" in md
+    assert "PASSED" in md
     assert "**PARTIAL** run (budget)" in md
     assert "task success 50%, RAG faithfulness 0.75" in md
     assert md.count("\n- **") == 2
@@ -298,7 +302,10 @@ def test_html_evidence_marks_and_tool_call_classes(html, result):
 
 def test_html_escapes_target_output(result):
     sample = result.cases[0].samples[0]
-    turns = [*sample.transcript.turns, TranscriptTurn(index=99, role=Role.assistant, content="<script>alert(1)</script>")]
+    turns = [
+        *sample.transcript.turns,
+        TranscriptTurn(index=99, role=Role.assistant, content="<script>alert(1)</script>"),
+    ]
     transcript = sample.transcript.model_copy(update={"turns": turns})
     case = result.cases[0].model_copy(
         update={"samples": [sample.model_copy(update={"transcript": transcript})], "title": "<b>x</b>"}

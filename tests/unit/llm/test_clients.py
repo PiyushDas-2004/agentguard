@@ -63,17 +63,22 @@ class TestFactory:
     def test_mock(self) -> None:
         llm = build_llm(LLMConfig(provider="mock", profile="attacker", injection_compliance=0.3), seed=4)
         assert isinstance(llm, MockLLM)
-        assert llm.profile == "attacker" and llm.seed == 4 and llm.injection_compliance == 0.3
+        assert llm.profile == "attacker"
+        assert llm.seed == 4
+        assert llm.injection_compliance == 0.3
 
     def test_offline_forces_mock(self) -> None:
         llm = build_llm(LLMConfig(provider="anthropic", profile="attacker"), offline=True)
-        assert isinstance(llm, MockLLM) and llm.profile == "vulnerable"
+        assert isinstance(llm, MockLLM)
+        assert llm.profile == "vulnerable"
 
     def test_live(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setenv("OPENAI_API_KEY", "x")
         llm = build_llm(LLMConfig(provider="openai", model="gpt-x", temperature=0.5, api_base="http://b"))
         assert isinstance(llm, LiteLLMClient)
-        assert llm.model == "gpt-x" and llm.temperature == 0.5 and llm.api_base == "http://b"
+        assert llm.model == "gpt-x"
+        assert llm.temperature == 0.5
+        assert llm.api_base == "http://b"
 
 
 # --------------------------------------------------------------------------- LiteLLM boundary stub
@@ -120,7 +125,7 @@ class FakeLiteLLM(types.ModuleType):
 
 @pytest.fixture
 def no_wait(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(litellm_client, "wait_exponential_jitter", lambda **_: tenacity.wait_none())
+    monkeypatch.setattr(litellm_client, "backoff", lambda *_a, **_k: tenacity.wait_none())
 
 
 def install(monkeypatch: pytest.MonkeyPatch, fake: FakeLiteLLM) -> FakeLiteLLM:
@@ -228,13 +233,17 @@ class TestLiteLLMClient:
     def test_anthropic_omits_openai_only_kwargs(self, monkeypatch: pytest.MonkeyPatch, keys: None) -> None:
         fake = install(monkeypatch, FakeLiteLLM([_raw("ok")], cost=RuntimeError("no price")))
         resp = asyncio.run(
-            LiteLLMClient("anthropic").complete([LLMMessage(role="user", content="q")], seed=1, json_mode=True, temperature=0.9)
+            LiteLLMClient("anthropic").complete(
+                [LLMMessage(role="user", content="q")], seed=1, json_mode=True, temperature=0.9
+            )
         )
         assert resp.text == "ok"
         assert resp.cost_usd == 0.0
         assert resp.tokens_in == 0
         kwargs = fake.calls[0]
-        assert "seed" not in kwargs and "response_format" not in kwargs and "tools" not in kwargs
+        assert "seed" not in kwargs
+        assert "response_format" not in kwargs
+        assert "tools" not in kwargs
         assert kwargs["temperature"] == 0.9
 
     def test_retries_retryable_then_succeeds(self, monkeypatch: pytest.MonkeyPatch, keys: None, no_wait: None) -> None:

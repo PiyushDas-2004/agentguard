@@ -54,7 +54,10 @@ class TestBinaryMetrics:
         m = binary_metrics([])
         assert (m.n, m.accuracy, m.precision, m.recall, m.f1, m.kappa) == (0, 0.0, 0.0, 0.0, 0.0, 0.0)
         m = binary_metrics([(False, False), (False, False)])
-        assert m.precision == 0.0 and m.recall == 0.0 and m.f1 == 0.0 and m.accuracy == 1.0
+        assert m.precision == 0.0
+        assert m.recall == 0.0
+        assert m.f1 == 0.0
+        assert m.accuracy == 1.0
 
 
 def _line(**overrides: object) -> str:
@@ -133,7 +136,9 @@ class TestCalibrate:
 
     def test_perfect(self, tmp_path: Path) -> None:
         report = asyncio.run(calibrate(ScriptedJudge([True, False, True, False]), self._gold(tmp_path)))
-        assert report.overall.kappa == 1.0 and report.meets_target and report.disagreements == []
+        assert report.overall.kappa == 1.0
+        assert report.meets_target
+        assert report.disagreements == []
         assert report.judge_id == "scripted"
 
     def test_mock_judge_on_real_gold_set(self) -> None:

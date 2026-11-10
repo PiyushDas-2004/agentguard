@@ -132,7 +132,8 @@ class TestTrialScheduler:
         outcome = asyncio.run(scheduler.run(list(range(20)), worker, on_result=seen.append))
         assert sorted(outcome.results) == [i * 2 for i in range(20)]
         assert sorted(seen) == sorted(outcome.results)
-        assert outcome.aborted is None and outcome.error is None
+        assert outcome.aborted is None
+        assert outcome.error is None
         assert 1 <= outcome.peak_in_flight <= 3
         assert peak <= 3
         assert outcome.peak_in_flight == 3
@@ -145,7 +146,8 @@ class TestTrialScheduler:
 
     def test_empty(self) -> None:
         outcome = asyncio.run(TrialScheduler(2).run([], _echo))
-        assert outcome.results == [] and outcome.peak_in_flight == 0
+        assert outcome.results == []
+        assert outcome.peak_in_flight == 0
 
     def test_budget_abort_keeps_finished(self) -> None:
         async def worker(i: int) -> int:
