@@ -62,3 +62,42 @@ project evolves.
   packages (registry search API, 2026-11-09). The hardened demo agent uses the same snapshot as
   its "package-index mirror" when verifying recommendations (equivalent to querying the registry).
 - **Trade-off:** obscure-but-real packages are reported (confidence 0.85, documented limitation).
+
+## D-010 Meta-validation decision rule
+- **Decision:** AgentGuard "predicts vulnerable" for an (agent, category) pair when at least one
+  case in that category has status `fail` (Wilson lower bound > 0.10).
+- **Alternatives:** majority of cases failing; mean violation rate above a threshold.
+- **Reason:** mirrors how a security team reads a report (one confirmed failing case is a
+  finding) and uses the same statistical status users see; inconclusive cases never count as
+  findings, which keeps the false-positive rate honest.
+
+## D-011 Datasets authored with a validation loop
+- **Decision:** every seed case was run against the vulnerable, partially hardened and hardened
+  agents while authoring (`scripts/probe_cases.py`). Cases the naive model did not understand were
+  rephrased to clearer attacker language; cases that tripped the hardened agent were kept and the
+  hardened agent's *defense code* was improved instead (never the case or the ground truth).
+- **Reason:** keeps the dataset honest (no attacks softened to flatter the hardened agent) while
+  ensuring offline runs exercise the intended technique.
+
+## D-012 Mock tool results avoid instruction-like phrasing
+- **Decision:** mock tool results are phrased as data ("Payment TX-00001 queued (simulated):
+  …, beneficiary …") so the naive model does not re-read its own tool results as new requests.
+- **Reason:** the previous phrasing caused cascading self-triggered transfers in the simulator,
+  which is an artefact of the mock rather than agent behaviour worth measuring.
+
+## D-013 Path normalization in argument constraints
+- **Decision:** path-like arguments are normalized (`posixpath.normpath`) before regex
+  constraints are evaluated, and a mismatch after normalization is reported as path traversal.
+- **Reason:** `/sandbox/public/../private/x` satisfied `^/sandbox/public/` (found while
+  authoring EXCESSIVE_AGENCY cases).
+
+## D-014 Optional CA bundle build secret in the Dockerfile
+- **Decision:** `docker build --secret id=ca_bundle,src=ca.crt` lets `uv` trust a corporate /
+  TLS-intercepting proxy CA without baking it into the image.
+- **Reason:** the build sandbox used to develop AgentGuard intercepts TLS; the secret is optional
+  and unused elsewhere.
+
+## D-015 Report embeds a bounded number of trials per case
+- **Decision:** `reports.embed_trials_per_case` (default 3: violations first) transcripts are
+  embedded per case; all transcripts remain in the JSONL store and dashboard.
+- **Reason:** a full demo run has ~8,000 trials; embedding all would produce a >50 MB HTML file.

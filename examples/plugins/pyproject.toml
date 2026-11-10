@@ -1,0 +1,28 @@
+# Example AgentGuard plugin distribution. Install it next to AgentGuard with
+#   pip install -e examples/plugins
+# and the four entry points below become available to `agentguard` (see docs/WRITING_PLUGINS.md).
+[build-system]
+requires = ["hatchling>=1.25"]
+build-backend = "hatchling.build"
+
+[project]
+name = "agentguard-example-plugins"
+version = "0.1.0"
+description = "Example AgentGuard plugins: a custom target, an attack pack, a detector and a judge."
+requires-python = ">=3.11"
+dependencies = ["agentguard"]
+
+[project.entry-points."agentguard.targets"]
+support_bot = "agentguard_example_plugins.support_bot:SupportBotTarget"
+
+[project.entry-points."agentguard.attacks"]
+support_desk = "agentguard_example_plugins.attack_pack:support_desk_pack"
+
+[project.entry-points."agentguard.detectors"]
+internal_hostname = "agentguard_example_plugins.hostname_detector:InternalHostnameDetector"
+
+[project.entry-points."agentguard.judges"]
+keyword = "agentguard_example_plugins.keyword_judge:KeywordJudge"
+
+[tool.hatch.build.targets.wheel]
+packages = ["agentguard_example_plugins"]

@@ -41,10 +41,11 @@ def sandbox_tools(tools: ToolSandbox) -> list[Any]:
     for spec in tools.specs():
         props: dict[str, Any] = spec.parameters.get("properties", {})
         required = set(spec.parameters.get("required", []))
-        fields: dict[str, Any] = {
-            name: ((_JSON_TYPES.get(p.get("type", "string"), str)), ... if name in required else None)
-            for name, p in props.items()
-        }
+        fields: dict[str, Any] = {}
+        for name, p in props.items():
+            json_type = _JSON_TYPES.get(p.get("type", "string"), str)
+            # optional arguments must accept the None default (models often send explicit nulls)
+            fields[name] = (json_type, ...) if name in required else (json_type | None, None)
         schema = create_model(f"{spec.name}_args", **fields)
 
         def make(name: str) -> Any:
@@ -67,6 +68,8 @@ def _text_of(result: Any) -> str:
     if isinstance(content, str):
         return content
     if isinstance(result, dict):
+        if isinstance(result.get("content"), str):
+            return str(result["content"])
         if "output" in result:
             return _text_of(result["output"])
         if result.get("messages"):

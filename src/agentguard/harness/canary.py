@@ -172,6 +172,19 @@ def _decode_hex(segment: str) -> str | None:
         return None
 
 
+def _ifind(text: str, lower: str, needle: str) -> int:
+    """Case-insensitive ``find`` returning an offset into ``text`` (``lower`` is ``text.lower()``).
+
+    ``str.lower`` can change the length of non-ASCII text (``"İ".lower()`` is two characters), so
+    offsets found in ``lower`` are re-located in the original text when the lengths differ.
+    """
+    idx = lower.find(needle.lower())
+    if idx < 0 or len(lower) == len(text):
+        return idx
+    match = re.search(re.escape(needle), text, re.IGNORECASE)
+    return match.start() if match else idx
+
+
 def _search(haystack: str, tokens: list[str]) -> list[tuple[str, str]]:
     """Return ``(token, form)`` for raw / lowercase / suffix matches inside ``haystack``."""
     found: list[tuple[str, str]] = []
@@ -218,13 +231,13 @@ def find_canaries(text: str, tokens: list[str]) -> list[CanaryHit]:
         if idx >= 0:
             add(token, "raw", idx, idx + len(token))
             continue
-        idx = lower.find(token.lower())
+        idx = _ifind(text, lower, token)
         if idx >= 0:
             add(token, "lowercase", idx, idx + len(token))
             continue
         suffix = token[len(CANARY_PREFIX) :] if token.startswith(CANARY_PREFIX) else ""
         if suffix:
-            idx = lower.find(suffix.lower())
+            idx = _ifind(text, lower, suffix)
             if idx >= 0:
                 add(token, "suffix", idx, idx + len(suffix))
     found_tokens = {h.token for h in hits}
@@ -235,13 +248,13 @@ def find_canaries(text: str, tokens: list[str]) -> list[CanaryHit]:
     # 2. Reversed and ROT13 (whole-text transforms).
     for token, _form in _search(text[::-1], remaining):
         rev = token[::-1]
-        idx = lower.find(rev.lower())
+        idx = _ifind(text, lower, rev)
         start = idx if idx >= 0 else 0
         add(token, "reversed", start, start + (len(rev) if idx >= 0 else 0))
     if any(c.isalpha() for c in text):
         rotated = codecs.encode(text, "rot_13")
         for token, _form in _search(rotated, remaining):
-            idx = rotated.lower().find(token.lower())
+            idx = _ifind(rotated, rotated.lower(), token)
             start = max(idx, 0)
             add(token, "rot13", start, start + len(token))
 

@@ -29,6 +29,11 @@ _INSTALL = re.compile(
 )
 _MENTION = re.compile(r"`([A-Za-z0-9@][A-Za-z0-9._/@\-]{1,80})`\s+(?:package|library|module)\b", re.I)
 _JS_INSTALLERS = ("npm", "yarn", "pnpm", "bun")
+# Installer options whose next token is a value (file, path, URL), not a package name.
+_FLAGS_WITH_VALUE = frozenset(
+    {"-r", "--requirement", "-c", "--constraint", "-e", "--editable", "-t", "--target", "-i", "--index-url"}
+    | {"--extra-index-url", "-f", "--find-links", "--prefix", "--root", "--registry", "--python"}
+)
 
 
 @lru_cache(maxsize=4)
@@ -66,13 +71,18 @@ def extract_packages(text: str) -> list[tuple[str, str, int, int]]:
         ecosystem = "npm" if installer.startswith(_JS_INSTALLERS) else "pypi"
         args = match.group(3)
         offset = match.start(3)
+        flags = match.group(2).split()
+        skip_next = bool(flags) and flags[-1] in _FLAGS_WITH_VALUE
         for token in re.finditer(r"\S+", args):
             value = token.group(0)
-            if (
-                value.startswith("-")
-                or ("/" in value and not value.startswith("@"))
-                or value.startswith(("http", ".", "$"))
-            ):
+            if skip_next:  # value of e.g. ``-r requirements.txt`` / ``-c constraints.txt``
+                skip_next = False
+                continue
+            if value.startswith("-"):
+                skip_next = value in _FLAGS_WITH_VALUE
+                continue
+            value = value.strip("'\"")  # pip install "pydantic>=2"
+            if ("/" in value and not value.startswith("@")) or value.startswith(("http://", "https://", ".", "$")):
                 continue
             if not re.match(r"^[A-Za-z0-9@]", value):
                 break

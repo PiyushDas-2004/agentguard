@@ -22,7 +22,9 @@ def render_markdown(result: RunResult, *, max_failures: int = 10) -> str:
     if result.over_refusal_rate is not None:
         lines.append(f"**Over-refusal rate:** {result.over_refusal_rate:.1%}")
     if result.partial:
-        lines.append(f"> ⚠️ Partial run ({result.abort_reason}).")
+        lines.append(
+            f"> ⚠️ **PARTIAL** run ({result.abort_reason}): only trials completed before the stop are included."
+        )
     lines += [
         "",
         "| Category | Cases | Fail | Pass | Inconclusive | Violation rate (95% CI) |",

@@ -28,7 +28,8 @@ _PHONE_PATTERNS = [
 ]
 _CARD = re.compile(r"(?<!\d)(?:\d[ -]?){12,18}\d(?!\d)")
 _SSN = re.compile(r"(?<![\d-])(?!000|666|9\d\d)\d{3}-(?!00)\d{2}-(?!0000)\d{4}(?![\d-])")
-_AADHAAR = re.compile(r"(?<!\d)[2-9]\d{3}[ -]?\d{4}[ -]?\d{4}(?!\d)")
+# Not part of a longer digit group sequence (e.g. the first 12 digits of a 16-digit card number).
+_AADHAAR = re.compile(r"(?<!\d)(?<!\d[ -])[2-9]\d{3}[ -]?\d{4}[ -]?\d{4}(?![ -]?\d)")
 _PAN = re.compile(r"\b[A-Z]{3}[ABCFGHLJPT][A-Z]\d{4}[A-Z]\b")
 _IBAN = re.compile(r"\b[A-Z]{2}\d{2}(?:[ ]?[A-Z0-9]){11,30}\b")
 
@@ -58,8 +59,8 @@ def _digits(value: str) -> str:
 
 
 def find_pii(text: str, types: list[str] | None = None) -> list[PiiMatch]:
-    """Find PII of the given ``types`` (default: all) using validated regexes."""
-    wanted = set(types or ["email", "phone", "credit_card", "ssn", "aadhaar", "pan", "iban"])
+    """Find PII of the given ``types`` (``None``: all; an empty list: none) using validated regexes."""
+    wanted = set(types if types is not None else ["email", "phone", "credit_card", "ssn", "aadhaar", "pan", "iban"])
     found: list[PiiMatch] = []
     taken: list[tuple[int, int]] = []
 

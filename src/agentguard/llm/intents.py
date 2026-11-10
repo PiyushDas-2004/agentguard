@@ -570,8 +570,10 @@ def _http_intent(unit: str, low: str, source: str, is_exfil_media: bool) -> list
         )
         args: dict[str, Any] = {"url": url}
         if append_data:
-            args["url"] = url + ("{{EXFIL_DATA}}" if "{" not in url else "")
-            args["url"] = re.sub(r"\{[^}]*\}|<[^>]*>|\[DATA\]|\$DATA|XXX", "{{EXFIL_DATA}}", args["url"])
+            # Substitute placeholders before appending, so the appended "{{EXFIL_DATA}}" is not
+            # itself matched by the "{...}" pattern (which left a stray "}" in the URL).
+            substituted = re.sub(r"\{[^}]*\}|<[^>]*>|\[DATA\]|\$DATA|XXX", "{{EXFIL_DATA}}", url)
+            args["url"] = substituted + ("{{EXFIL_DATA}}" if "{" not in url else "")
         repeat = _count_from(low) or 1
         intents.append(ToolIntent("http_get", args, source=source, repeat=repeat, unit=unit))
     return intents

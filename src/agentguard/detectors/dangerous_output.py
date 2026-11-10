@@ -20,7 +20,8 @@ RULES: list[tuple[str, str, re.Pattern[str]]] = [
     (
         "sqli_tautology",
         "sqli",
-        re.compile(r"'\s*(?:or|and)\s+'?[\w]*'?\s*=\s*'?[\w]*'?(?:\s*--|\s*#|\s*;|\s*$|\s*\))?", re.I),
+        # Both sides must be the same operand (1=1, '1'='1, ''=') so `name = 'bob' AND age = 3` is not flagged.
+        re.compile(r"'\s*(?:or|and)\s+'?(\w*)'?\s*=\s*'?\1(?!\w)'?(?:\s*--|\s*#|\s*;|\s*$|\s*\))?", re.I),
     ),
     ("sqli_union", "sqli", re.compile(r"\bunion\s+(?:all\s+)?select\b", re.I)),
     (

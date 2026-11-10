@@ -7,16 +7,24 @@ Entry-point groups:
 * ``agentguard.detectors`` — a :class:`~agentguard.detectors.base.Detector` subclass;
 * ``agentguard.judges`` — a :class:`~agentguard.judges.base.Judge` subclass;
 * ``agentguard.attacks`` — a callable returning a list of dataset paths (attack packs).
+
+:func:`register_detectors`, :func:`attack_pack_paths` and :func:`load_judge` load the last three
+groups and check each plugin honours its contract (see ``docs/WRITING_PLUGINS.md``).
 """
 
 from __future__ import annotations
 
 from importlib.metadata import EntryPoint, entry_points
-from typing import Any
+from pathlib import Path
+from typing import TYPE_CHECKING, Any
 
 from agentguard.core.errors import ConfigError
 
-__all__ = ["GROUPS", "discover", "load_reference"]
+if TYPE_CHECKING:
+    from agentguard.detectors.registry import DetectorRegistry
+    from agentguard.judges.base import Judge
+
+__all__ = ["GROUPS", "attack_pack_paths", "discover", "load_judge", "load_reference", "register_detectors"]
 
 GROUPS = ("agentguard.targets", "agentguard.detectors", "agentguard.judges", "agentguard.attacks")
 
@@ -44,3 +52,59 @@ def load_reference(reference: str) -> Any:
     from agentguard.targets.python_callable import load_object
 
     return load_object(reference)
+
+
+def register_detectors(registry: DetectorRegistry, extra: list[EntryPoint] | None = None) -> list[str]:
+    """Register every ``agentguard.detectors`` plugin in ``registry``; return the detector ids.
+
+    Raises:
+        ConfigError: a plugin is not a :class:`~agentguard.detectors.base.Detector` subclass.
+    """
+    from agentguard.detectors.base import Detector
+
+    ids: list[str] = []
+    for name, cls in discover("agentguard.detectors", extra).items():
+        if not (isinstance(cls, type) and issubclass(cls, Detector)):
+            raise ConfigError(f"plugin detector {name!r} is not a Detector subclass")
+        registry.register(cls)
+        ids.append(cls.id)
+    return ids
+
+
+def attack_pack_paths(extra: list[EntryPoint] | None = None) -> list[Path]:
+    """Call every ``agentguard.attacks`` plugin and return the dataset paths it provides.
+
+    Raises:
+        ConfigError: a pack is not callable, fails, or returns a path that does not exist.
+    """
+    paths: list[Path] = []
+    for name, factory in discover("agentguard.attacks", extra).items():
+        if not callable(factory):
+            raise ConfigError(f"attack pack {name!r} must be a callable returning dataset paths")
+        try:
+            returned = factory()
+        except Exception as exc:
+            raise ConfigError(f"attack pack {name!r} failed: {exc}") from exc
+        for item in [returned] if isinstance(returned, (str, Path)) else list(returned or []):
+            path = Path(item)
+            if not path.exists():
+                raise ConfigError(f"attack pack {name!r} returned a missing dataset path: {path}")
+            paths.append(path)
+    return paths
+
+
+def load_judge(name: str, extra: list[EntryPoint] | None = None, **kwargs: Any) -> Judge:
+    """Instantiate the ``agentguard.judges`` plugin called ``name`` with ``kwargs``.
+
+    Raises:
+        ConfigError: unknown name, or the plugin does not produce a :class:`~agentguard.judges.base.Judge`.
+    """
+    from agentguard.judges.base import Judge
+
+    plugins = discover("agentguard.judges", extra)
+    if name not in plugins:
+        raise ConfigError(f"unknown judge plugin {name!r} — hint: one of {sorted(plugins)}")
+    judge = plugins[name](**kwargs)
+    if not isinstance(judge, Judge):
+        raise ConfigError(f"plugin judge {name!r} is not a Judge")
+    return judge

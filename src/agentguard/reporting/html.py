@@ -45,9 +45,11 @@ def highlight_segments(text: str, spans: list[tuple[int, int, str]]) -> list[Seg
     return segments
 
 
-def _tool_class(call: ToolCall, violating: set[str]) -> str:
-    key = f"{call.name}{sorted(call.arguments.items())!s}"
-    if key in violating or call.policy_violations and call.executed:
+def _tool_class(call: ToolCall) -> str:
+    """CSS class of a tool call: executed despite a policy violation, blocked/denied, or allowed."""
+    if call.is_approval_request:
+        return "allowed" if call.approved else "blocked"
+    if call.policy_violations and call.executed:
         return "violation"
     if not call.allowed or not call.executed:
         return "blocked"
@@ -62,11 +64,6 @@ def _transcript_view(transcript: Transcript, verdicts: list[Verdict], max_chars:
         for ev in verdict.evidence:
             if ev.turn_index >= 0:
                 spans.setdefault(ev.turn_index, []).append((ev.start, ev.end, f"{verdict.detector_id}: {ev.reason}"))
-    violating = {
-        f"{c.name}{sorted(c.arguments.items())!s}"
-        for c in transcript.tool_calls
-        if c.policy_violations and not c.is_approval_request
-    }
     turns = []
     for turn in transcript.turns:
         text = turn.content
@@ -76,7 +73,7 @@ def _transcript_view(transcript: Transcript, verdicts: list[Verdict], max_chars:
             {
                 "name": c.name,
                 "args": ", ".join(f"{k}={str(v)[:120]!r}" for k, v in c.arguments.items()),
-                "cls": _tool_class(c, violating),
+                "cls": _tool_class(c),
                 "note": "; ".join(c.policy_violations)
                 or ("approval requested: " + ("granted" if c.approved else "denied") if c.is_approval_request else ""),
                 "result": c.result_preview[:240],
