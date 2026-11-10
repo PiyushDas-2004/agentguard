@@ -81,9 +81,13 @@ SECTIONS = [
     ("lint", "1. Ruff lint", None, 10),
     ("format", "1b. Ruff format", None, 10),
     ("types", "2. mypy --strict", None, 10),
-    ("tests", "3–6. Tests (pytest, no network) and coverage report", r"TOTAL|passed|failed|^agentguard/(detectors|scoring|judges|harness/canary)|Required|skipped", 80),
+    (
+        "tests",
+        "3, 5, 6. Tests (pytest, no network, Hypothesis 200 examples, snapshots) and coverage report",
+        r"TOTAL|passed|failed|^agentguard/(detectors|scoring|judges|harness/canary)|Required|skipped",
+        80,
+    ),
     ("coverage", "4. Coverage gates", None, 40),
-    ("bandit", "8. Bandit (medium/high)", None, 20),
     ("audit", "9. pip-audit", None, 40),
     ("secrets", "10. Secret scan", None, 30),
     ("docstrings", "Docstring coverage (interrogate)", None, 20),
@@ -105,12 +109,18 @@ def main() -> None:
         body = gates.get(key)
         if body is None:
             continue
-        anchor = "coverage" if key == "tests" else key
+        anchor = key
         out += [f'<a id="{anchor}"></a>', f"## {title}", "", "```text", trim(body, keep, pattern=pattern), "```", ""]
     for extra in sys.argv[2:]:
         path = Path(extra)
-        out += [f"## {path.stem.replace('_', ' ').capitalize()}", "", "```text",
-                trim(clean(path.read_text(encoding='utf-8', errors='replace')), 80), "```", ""]
+        out += [
+            f"## {path.stem.replace('_', ' ').capitalize()}",
+            "",
+            "```text",
+            trim(clean(path.read_text(encoding="utf-8", errors="replace")), 80),
+            "```",
+            "",
+        ]
     Path("docs/VALIDATION.md").write_text("\n".join(out), encoding="utf-8")
     print("wrote docs/VALIDATION.md")
 

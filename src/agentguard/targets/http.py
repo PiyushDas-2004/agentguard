@@ -68,7 +68,7 @@ class HTTPTarget(BaseTarget):
         self.url = interpolate_env(url)
         self.method = method
         self.headers = {k: interpolate_env(v) for k, v in (headers or {}).items()}
-        env = SandboxedEnvironment(undefined=StrictUndefined, autoescape=False)  # nosec B701 - JSON body, not HTML
+        env = SandboxedEnvironment(undefined=StrictUndefined, autoescape=False)  # renders a JSON body, not HTML
         try:
             self.template = env.from_string(request_template or DEFAULT_TEMPLATE)
         except TemplateError as exc:

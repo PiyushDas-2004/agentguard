@@ -105,6 +105,7 @@ ignore = [
 "tests/**" = ["S", "PLR", "N802", "B017", "PT011", "ASYNC"]
 "scripts/**" = ["S", "T20"]
 "scripts/gen_attacks_doc.py" = ["S", "T20", "E501"]  # prose table
+"scripts/build_validation_doc.py" = ["S", "T20", "E501"]  # prose table
 "examples/**" = ["S"]
 # Regex-grammar modules: long patterns are clearer unwrapped.
 "src/agentguard/llm/intents.py" = ["E501", "S105"]

@@ -85,7 +85,7 @@ def format_validation_error(exc: ValidationError, *, prefix: str = "", origin: s
             try:
                 line += " — hint: " + hint.format(**ctx)
             except KeyError:
-                pass
+                line += " — hint: " + hint.split("{", 1)[0].strip()  # context value unavailable
         lines.append(line)
     header = f"invalid configuration in {origin}:"
     return header + "\n  " + "\n  ".join(lines)

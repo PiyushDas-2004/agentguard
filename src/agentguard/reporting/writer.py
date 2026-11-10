@@ -45,7 +45,7 @@ def write_report(result: RunResult, fmt: str, out_dir: str | Path) -> Path:
         try:
             with os.fdopen(fd, "w", encoding="utf-8") as handle:
                 handle.write(content)
-            os.chmod(tmp, 0o644)  # nosec B103 - reports are meant to be readable
+            os.chmod(tmp, 0o644)  # reports are meant to be world-readable
             os.replace(tmp, target)
         except BaseException:
             Path(tmp).unlink(missing_ok=True)

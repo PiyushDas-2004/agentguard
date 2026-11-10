@@ -5,7 +5,7 @@ security *and* quality, with statistical rigor, deterministic canary-based detec
 self-validating accuracy.**
 
 [![ci](https://github.com/PiyushDas-2004/agentguard/actions/workflows/ci.yml/badge.svg)](https://github.com/PiyushDas-2004/agentguard/actions/workflows/ci.yml)
-[![coverage](https://img.shields.io/badge/coverage-@@COVERAGE@@%25-brightgreen)](docs/VALIDATION.md#coverage)
+[![coverage](https://img.shields.io/badge/coverage-99%25-brightgreen)](docs/VALIDATION.md#coverage)
 [![license](https://img.shields.io/badge/license-Apache--2.0-blue)](LICENSE)
 [![python](https://img.shields.io/badge/python-3.11%20%7C%203.12-blue)](pyproject.toml)
 
@@ -50,7 +50,7 @@ Want the passing case? `uv run agentguard run -c examples/demo_hardened.yaml --o
 * **12 attack categories + over-refusal**: direct/indirect prompt injection, jailbreaks (incl.
   multi-turn crescendo), system-prompt leakage, data exfiltration, PII disclosure, excessive
   agency, insecure output, memory poisoning, RAG poisoning, denial of wallet, package
-  hallucination; **@@ATTACKS@@ attack seed cases** and **@@BENIGN@@ benign cases** — all canary/mock-tool based.
+  hallucination; **308 attack seed cases** and **64 benign cases** — all canary/mock-tool based.
 * **7 injection vectors**: user message, deployment context, RAG document, tool output, file,
   e-mail, web page, memory (cross-session).
 * **Mutation engine**: base64, ROT13, leetspeak, homoglyphs, zero-width characters, token
@@ -58,7 +58,7 @@ Want the passing case? `uv run agentguard run -c examples/demo_hardened.yaml --o
   decoders and robustness metrics.
 * **Adaptive attacker**: PAIR-style refinement loop, budget-capped.
 * **9 deterministic detectors** with evidence spans + rubric-driven LLM judge (JSON-validated,
-  repair retries, ensemble, calibration against @@GOLD@@ hand-labelled examples).
+  repair retries, ensemble, calibration against 128 hand-labelled examples).
 * **Targets**: Python callables (sync/async), HTTP (Jinja2 request template + JSONPath),
   OpenAI-compatible endpoints with function calling, LangChain/LangGraph, MCP servers (stdio);
   plugin entry points for targets, attack packs, detectors and judges.
@@ -112,15 +112,72 @@ See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
 ## Sample CLI output
 
-@@CLI_OUTPUT@@
+```text
+$ uv run agentguard run -c examples/demo.yaml --offline
+                          AgentGuard — demo-vulnerable                          
+┏━━━━━━━━━━━━━━━━━━━┳━━━━━━━┳━━━━━━┳━━━━━━┳━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━┓
+┃ category          ┃ cases ┃ fail ┃ pass ┃ inconcl. ┃ violation rate (95% CI) ┃
+┡━━━━━━━━━━━━━━━━━━━╇━━━━━━━╇━━━━━━╇━━━━━━╇━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━┩
+│ PI_DIRECT         │ 46    │ 45   │ 0    │ 1        │ 92% (0.90–0.93)         │
+│ PI_INDIRECT       │ 42    │ 41   │ 0    │ 1        │ 87% (0.85–0.89)         │
+│ JAILBREAK         │ 32    │ 31   │ 0    │ 1        │ 94% (0.91–0.95)         │
+│ SYS_PROMPT_LEAK   │ 22    │ 22   │ 0    │ 0        │ 92% (0.90–0.95)         │
+│ DATA_EXFIL        │ 29    │ 29   │ 0    │ 0        │ 97% (0.95–0.98)         │
+│ PII_LEAK          │ 19    │ 19   │ 0    │ 0        │ 94% (0.92–0.96)         │
+│ EXCESSIVE_AGENCY  │ 35    │ 35   │ 0    │ 0        │ 92% (0.90–0.94)         │
+│ INSECURE_OUTPUT   │ 26    │ 26   │ 0    │ 0        │ 83% (0.80–0.86)         │
+│ MEMORY_POISON     │ 13    │ 13   │ 0    │ 0        │ 93% (0.89–0.96)         │
+│ RAG_POISON        │ 16    │ 16   │ 0    │ 0        │ 62% (0.55–0.69)         │
+│ DENIAL_OF_WALLET  │ 14    │ 14   │ 0    │ 0        │ 87% (0.82–0.90)         │
+│ PKG_HALLUCINATION │ 14    │ 14   │ 0    │ 0        │ 93% (0.90–0.96)         │
+│ OVER_REFUSAL      │ 64    │ 0    │ 0    │ 64       │ 0% (0.00–0.01)          │
+└───────────────────┴───────┴──────┴──────┴──────────┴─────────────────────────┘
+Risk score 95.2 / 100 · grade F · threshold 40 → FAILED
+```
+
+The hardened agent on the same config: `Risk score 17.2 / 100 · grade B · threshold 40 → PASSED` (exit code 0).
 
 ## Meta-validation: how accurate is AgentGuard?
 
-@@META@@
+`agentguard meta-validate` runs the full security suite (6,330 trials per agent: 372 cases × 5 trials × seed + 3 mutations, minus non-mutable cases) against five demo agents whose vulnerabilities are documented per category in [`examples/ground_truth.yaml`](examples/ground_truth.yaml) (written from their code), and scores AgentGuard itself. Real output, full logs in [docs/VALIDATION.md](docs/VALIDATION.md):
+
+| Metric | Value | Target |
+|---|---|---|
+| Precision | **1.000** | — |
+| Recall | **1.000** | ≥ 0.90 |
+| F1 | **1.000** | — |
+| False-positive rate | **0.000** | ≤ 0.10 |
+| Partially hardened agent: categories matching ground truth | **100%** | ≥ 85% |
+| (agent, category) pairs evaluated | 65 (TP 33, FP 0, TN 32, FN 0) | — |
+
+| Demo agent | Risk score | Grade | Over-refusal |
+|---|---|---|---|
+| `vulnerable` | 95.18 | F | 0.0% |
+| `partially_hardened` | 83.71 | F | 34.4% |
+| `hardened` | 17.19 | B | 0.0% |
+| `rag` | 47.06 | D | 0.0% |
+| `rag_hardened` | 17.12 | B | 0.0% |
+
+All five agents use the *same* naive mock model; the hardened agents are safe only because of their defense code ([`examples/targets/defenses.py`](examples/targets/defenses.py)). The first full run had one false positive (FPR 0.031); it was traced to a dataset case attributing a correct leak finding to the wrong category and fixed in the dataset, not the ground truth ([DECISIONS D-016](docs/DECISIONS.md)).
+
+The quality suite exposes the cost of those defenses: task success is 100% for the vulnerable agent and 65% for the hardened one (plan-then-execute and provenance checks block some legitimate multi-step tasks) — a security/utility trade-off AgentGuard makes visible.
 
 ## OWASP LLM Top 10 (2025) coverage
 
-@@OWASP@@
+| OWASP LLM Top 10 (2025) | Cases | Vulnerable demo: fail / pass / inconcl. | Hardened demo: fail / pass / inconcl. |
+|---|---|---|---|
+| LLM01:2025 Prompt Injection | 171 | 168 / 0 / 3 | 0 / 0 / 171 |
+| LLM02:2025 Sensitive Information Disclosure | 85 | 85 / 0 / 0 | 0 / 0 / 85 |
+| LLM03:2025 Supply Chain | 14 | 14 / 0 / 0 | 0 / 0 / 14 |
+| LLM04:2025 Data and Model Poisoning | 29 | 29 / 0 / 0 | 0 / 0 / 29 |
+| LLM05:2025 Improper Output Handling | 26 | 26 / 0 / 0 | 0 / 0 / 26 |
+| LLM06:2025 Excessive Agency | 52 | 52 / 0 / 0 | 0 / 0 / 52 |
+| LLM07:2025 System Prompt Leakage | 43 | 42 / 0 / 1 | 0 / 0 / 43 |
+| LLM08:2025 Vector and Embedding Weaknesses | 16 | 16 / 0 / 0 | 0 / 0 / 16 |
+| LLM09:2025 Misinformation | 14 | 14 / 0 / 0 | 0 / 0 / 14 |
+| LLM10:2025 Unbounded Consumption | 15 | 15 / 0 / 0 | 0 / 0 / 15 |
+
+Hardened cases are *inconclusive* rather than *pass* because 0 violations in 20 trials still leaves a 95% upper bound of 0.16 — see [SCORING](docs/SCORING.md).
 
 ## Test your own agent
 
@@ -176,6 +233,19 @@ Exit codes: `0` pass · `1` risk above threshold or critical failure · `2` conf
 runtime error · `4` budget exceeded (partial report still written). Details in
 [docs/CI_INTEGRATION.md](docs/CI_INTEGRATION.md).
 
+## Engineering quality (measured, see [docs/VALIDATION.md](docs/VALIDATION.md))
+
+| Gate | Result |
+|---|---|
+| Tests (offline, `pytest-socket`, Hypothesis 200 examples/property) | **1,641 passed** (+4 live-provider tests, skipped without keys) |
+| Coverage | **99.2 %** overall · detectors 99.7 % · scoring, judges, canary 100 % |
+| Mutation testing (mutmut on scoring + detectors) | **87.6 %** killed (1,725 / 1,970) |
+| `mypy --strict`, ruff, bandit (medium/high), pip-audit, secret scan | clean |
+| Determinism (same seed, two offline runs) | identical results |
+| Load test (1,000 trials, concurrency 32, 100/s limit) | 0 lost trials · achieved 100.9/s (0.9 % off) · +21.7 MB RSS |
+| Docker image + `docker compose` dashboard | builds · `/healthz` healthy |
+| Fresh clone → README quickstart | passes |
+
 ## How AgentGuard compares
 
 | | AgentGuard | garak | PyRIT | promptfoo | DeepEval | RAGAS |
@@ -186,7 +256,7 @@ runtime error · `4` budget exceeded (partial report still written). Details in
 | Confidence intervals / statistical status | ✅ Wilson 95% | ❌ | ❌ | ❌ | ❌ | ❌ |
 | Self-validation against known-vulnerable agents | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ |
 | Quality metrics (trajectory, RAG) | ✅ built-in + adapters | ❌ | ❌ | ✅ | ✅ | ✅ |
-| Size of attack library | ~@@ATTACKS@@ seeds | very large | large (converters) | large (plugins) | n/a | n/a |
+| Size of attack library | ~308 seeds | very large | large (converters) | large (plugins) | n/a | n/a |
 | Live-model attack strength (PAIR/TAP etc.) | PAIR loop | many probes | strongest | several | n/a | n/a |
 | SARIF / JUnit / CI action | ✅ / ✅ / ✅ | ❌ / ❌ / ❌ | ❌ | ✅ JUnit, CI | pytest integration | ❌ |
 
@@ -202,7 +272,7 @@ CI-gating results.
   live mode (`examples/demo_live.yaml`) for that.
 * **Meta-validation is on AgentGuard's own demo agents.** It shows the detectors and statistics
   work against known ground truth; it is not a benchmark of real-world agents.
-* **Mock judge calibration is weak** (κ = @@KAPPA@@ on the gold set): offline, deterministic detectors
+* **Mock judge calibration is weak** (κ = 0.27 on the gold set): offline, deterministic detectors
   carry the verdicts; for judge-dependent categories in live mode, calibrate your judge first.
 * **Package snapshot** covers the most popular PyPI/npm names; obscure real packages may be
   reported (confidence 0.85).

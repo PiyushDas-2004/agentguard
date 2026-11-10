@@ -33,4 +33,4 @@ def derive_seed(base_seed: int, *parts: object) -> int:
 
 def derive_rng(base_seed: int, *parts: object) -> random.Random:
     """Return a ``random.Random`` seeded with :func:`derive_seed` (not for cryptography)."""
-    return random.Random(derive_seed(base_seed, *parts))  # noqa: S311  # nosec B311 - simulation RNG, not security
+    return random.Random(derive_seed(base_seed, *parts))  # noqa: S311  # simulation RNG, not security  # nosec B311

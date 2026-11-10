@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import secrets
-import subprocess  # nosec B404 - used only to read the git SHA with a fixed argument list
+import subprocess  # git SHA only, fixed argv  # nosec B404
 import time
 from collections import defaultdict
 from collections.abc import Callable
@@ -65,7 +65,7 @@ def new_run_id() -> str:
 def git_sha() -> str | None:
     """Current git commit SHA (``None`` outside a repository)."""
     try:
-        out = subprocess.run(  # nosec B603 B607 - fixed argv, no shell
+        out = subprocess.run(  # fixed argv, no shell  # nosec B603 B607
             ["git", "rev-parse", "HEAD"],  # noqa: S607
             capture_output=True,
             text=True,

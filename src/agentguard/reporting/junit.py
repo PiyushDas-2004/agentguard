@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-import xml.etree.ElementTree as ET  # nosec B405 - we only *write* XML here
+import xml.etree.ElementTree as ET  # only *writes* XML (never parses)  # nosec B405
 
 from agentguard.core.types import CaseStatus, RunResult
 
