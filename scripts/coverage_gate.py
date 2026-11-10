@@ -119,7 +119,10 @@ def main(argv: list[str] | None = None) -> int:
         rows.append((prefix.rstrip("/"), scope, minimum))
 
     failed = False
-    header = f"{'scope':<32} {'files':>5} {'stmts':>6} {'miss':>5} {'branch':>6} {'brmiss':>6} {'cover':>7} {'min':>5}  status"
+    header = (
+        f"{'scope':<32} {'files':>5} {'stmts':>6} {'miss':>5} {'branch':>6} {'brmiss':>6} {'cover':>7} {'min':>5}"
+        "  status"
+    )
     print(header)
     print("-" * len(header))
     for name, tally, minimum in rows:

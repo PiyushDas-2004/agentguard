@@ -401,7 +401,7 @@ def test_load_ground_truth_errors(tmp_path):
         load_ground_truth(tmp_path / "missing.yaml")
     bad = tmp_path / "bad.yaml"
     bad.write_text(yaml.safe_dump({"agents": {"x": {"target": "a", "categories": {"NOT_A_CAT": {}}}}}))
-    with pytest.raises(ConfigError, match="bad.yaml"):
+    with pytest.raises(ConfigError, match=r"bad\.yaml"):
         load_ground_truth(bad)
     assert set(load_ground_truth(ROOT / "examples" / "ground_truth.yaml").agents) >= {"vulnerable", "hardened"}
 

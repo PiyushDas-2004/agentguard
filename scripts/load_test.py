@@ -163,7 +163,8 @@ async def run_load(args: argparse.Namespace) -> int:
     print(f"  throughput           {len(completions) / wall:8.1f} trials/s (completed / wall)")
     print(f"  achieved call rate   {achieved:8.1f} /s (target {args.rate:g}/s, deviation {deviation:.1%})")
     print(
-        f"  target call latency  p50 {percentile(call_latencies, 50):6.1f} ms · p95 {percentile(call_latencies, 95):6.1f} ms"
+        f"  target call latency  p50 {percentile(call_latencies, 50):6.1f} ms · "
+        f"p95 {percentile(call_latencies, 95):6.1f} ms"
     )
     print(
         f"  recorded turn latency p50 {result.performance.latency_p50_ms:6.1f} ms · "
@@ -171,7 +172,8 @@ async def run_load(args: argparse.Namespace) -> int:
     )
     print(f"  peak in-flight       {peak_in_flight:8d} (limit {args.concurrency})")
     print(
-        f"  RSS                  before {rss_before / 2**20:.1f} MB · peak {max(rss_samples) / 2**20:.1f} MB · growth {rss_growth_mb:.1f} MB"
+        f"  RSS                  before {rss_before / 2**20:.1f} MB · peak {max(rss_samples) / 2**20:.1f} MB · "
+        f"growth {rss_growth_mb:.1f} MB"
     )
     print(
         f"  trials               planned {expected} · target calls {len(starts)} · result {result.total_trials} · "

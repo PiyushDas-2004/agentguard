@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import itertools
 import time
 from typing import Any
 
@@ -12,7 +13,6 @@ from agentguard.core.errors import TargetError
 from agentguard.core.types import CaseStatus
 from agentguard.storage.db import Database
 from tests.failure_injection._support import case, make_config, make_runner, run
-import itertools
 
 CASES = [case("FI-TST-001"), case("FI-TST-002")]
 
