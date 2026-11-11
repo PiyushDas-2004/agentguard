@@ -37,3 +37,6 @@ transcripts/
 .DS_Store
 .idea/
 .vscode/
+
+# git bundles produced for offline transfer
+*.bundle
