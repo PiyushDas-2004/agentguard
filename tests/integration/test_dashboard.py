@@ -223,3 +223,26 @@ def test_trend_points_scaling() -> None:
     assert points[1] == {"x": 300.0, "y": 80.0, "label": "b", "risk": 50.0}
     single = trend_points([("only", 12.345)])
     assert single == [{"x": 0.0, "y": 140.2, "label": "only", "risk": 12.3}]
+
+
+def test_banner_from_environment_is_rendered(tmp_path, monkeypatch):
+    from fastapi.testclient import TestClient
+
+    from agentguard.dashboard.app import create_app
+
+    monkeypatch.setenv("AGENTGUARD_BANNER", "Public demo: offline runs of the bundled demo agents.")
+    client = TestClient(create_app(tmp_path / "ag.db", tmp_path / "tr"))
+    assert "Public demo: offline runs of the bundled demo agents." in client.get("/").text
+    monkeypatch.delenv("AGENTGUARD_BANNER")
+    assert 'role="note"' not in TestClient(create_app(tmp_path / "ag.db", tmp_path / "tr")).get("/").text
+
+
+def test_banner_is_html_escaped(tmp_path):
+    from fastapi.testclient import TestClient
+
+    from agentguard.dashboard.app import create_app
+
+    client = TestClient(create_app(tmp_path / "ag.db", tmp_path / "tr", banner="<script>x</script>"))
+    body = client.get("/").text
+    assert "<script>x</script>" not in body
+    assert "&lt;script&gt;x&lt;/script&gt;" in body

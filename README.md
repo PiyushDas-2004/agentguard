@@ -36,6 +36,7 @@ self-validating accuracy.**
 git clone https://github.com/PiyushDas-2004/agentguard && cd agentguard
 uv sync
 uv run agentguard run -c examples/demo.yaml --offline   # exits 1: the demo agent is vulnerable
+# or, without cloning:  pip install git+https://github.com/PiyushDas-2004/agentguard  (attack library bundled)
 open reports/agentguard-*.html                          # or xdg-open on Linux
 ```
 
@@ -44,6 +45,14 @@ network). A browsable example report is committed at
 [docs/sample_report/](docs/sample_report/index.html).
 
 Want the passing case? `uv run agentguard run -c examples/demo_hardened.yaml --offline` (exit 0).
+
+## Hosting
+
+* **Website:** https://piyushdas-2004.github.io/agentguard/ — landing page and sample reports (GitHub Pages).
+* **Live dashboard:** [![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/PiyushDas-2004/agentguard)
+  — or locally: `docker run -p 8000:8000 ghcr.io/piyushdas-2004/agentguard-demo:latest`.
+* **Images** `ghcr.io/piyushdas-2004/agentguard` (CLI) and `ghcr.io/piyushdas-2004/agentguard-demo` (dashboard with demo
+  runs) are published on every push to `main`. See [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).
 
 ## Features
 
@@ -291,7 +300,7 @@ CI-gating results.
 
 [Architecture](docs/ARCHITECTURE.md) · [Threat model](docs/THREAT_MODEL.md) ·
 [Attacks](docs/ATTACKS.md) · [Scoring](docs/SCORING.md) · [Validation](docs/VALIDATION.md) ·
-[Plugins](docs/WRITING_PLUGINS.md) · [CI](docs/CI_INTEGRATION.md) ·
+[Plugins](docs/WRITING_PLUGINS.md) · [CI](docs/CI_INTEGRATION.md) · [Deployment](docs/DEPLOYMENT.md) ·
 [Decisions](docs/DECISIONS.md) · [Dataset authoring](docs/DATASET_AUTHORING.md)
 
 ## Responsible use

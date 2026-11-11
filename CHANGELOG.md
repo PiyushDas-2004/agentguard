@@ -4,7 +4,18 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/).
 
-## [1.0.0] - 2026-11-10
+## [1.0.0] - 2026-11-11
+
+### Fixed (pre-release verification)
+- Ctrl-C raised inside a trial on Python 3.11 now keeps and reports partial results.
+- `pip install` users get the bundled attack library, corpus, quality tasks and gold set
+  (datasets ship in the wheel and relative `datasets/...` paths fall back to them).
+
+### Added (hosting)
+- Demo dashboard image (`deploy/demo.Dockerfile`), GHCR publishing, GitHub Pages site,
+  one-click Render blueprint; dashboard honours `PORT`, `AGENTGUARD_HOST`, `AGENTGUARD_DB`,
+  `AGENTGUARD_BANNER`.
+
 
 ### Added
 - **Evaluation harness:** seeded virtual environment (files, database, web, inbox, memory,

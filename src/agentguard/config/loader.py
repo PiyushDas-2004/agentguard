@@ -115,14 +115,18 @@ def interpolate_env(value: str, *, strict: bool = False) -> str:
 
 
 def resolve_path(value: str, base_dir: Path) -> Path:
-    """Resolve a config-relative path: absolute, then CWD-relative, then config-dir-relative."""
+    """Resolve a path: absolute, then CWD-relative, then config-dir-relative, then bundled datasets."""
     path = Path(value)
     if path.is_absolute():
         return path
     if path.exists():
         return path.resolve()
     candidate = base_dir / path
-    return candidate.resolve() if candidate.exists() else path
+    if candidate.exists():
+        return candidate.resolve()
+    from agentguard.bundled import resolve_bundled
+
+    return resolve_bundled(path) or path
 
 
 def load_config(path: str | Path) -> AgentGuardConfig:

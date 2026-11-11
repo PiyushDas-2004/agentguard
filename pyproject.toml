@@ -88,6 +88,9 @@ path = "src/agentguard/version.py"
 [tool.hatch.build.targets.wheel]
 packages = ["src/agentguard"]
 
+[tool.hatch.build.targets.wheel.force-include]
+"datasets" = "agentguard/_datasets"   # attack library, corpus, quality tasks, judge gold set
+
 [tool.ruff]
 line-length = 120
 target-version = "py311"
@@ -106,6 +109,7 @@ ignore = [
 "scripts/**" = ["S", "T20"]
 "scripts/gen_attacks_doc.py" = ["S", "T20", "E501"]  # prose table
 "scripts/build_validation_doc.py" = ["S", "T20", "E501"]  # prose table
+"scripts/build_site.py" = ["S", "T20", "E501"]  # inline HTML/CSS template
 "examples/**" = ["S"]
 # Regex-grammar modules: long patterns are clearer unwrapped.
 "src/agentguard/llm/intents.py" = ["E501", "S105"]

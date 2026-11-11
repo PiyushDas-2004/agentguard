@@ -1,0 +1,14 @@
+# One-click deployment of the AgentGuard demo dashboard on Render:
+# https://render.com/deploy?repo=https://github.com/PiyushDas-2004/agentguard
+services:
+  - type: web
+    name: agentguard-dashboard
+    runtime: docker
+    plan: free
+    dockerfilePath: ./deploy/demo.Dockerfile
+    dockerContext: .
+    healthCheckPath: /healthz
+    autoDeploy: true
+    envVars:
+      - key: AGENTGUARD_HOST
+        value: 0.0.0.0

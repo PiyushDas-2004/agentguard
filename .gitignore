@@ -40,3 +40,4 @@ transcripts/
 
 # git bundles produced for offline transfer
 *.bundle
+_site/

@@ -56,6 +56,14 @@ def exit_code_for(result: RunResult) -> ExitCode:
     return ExitCode.OK
 
 
+def _dataset_path(value: str) -> Path:
+    """A local path if it exists, else the bundled copy (pip installs), else the path as given."""
+    from agentguard.bundled import resolve_bundled
+
+    path = Path(value)
+    return path if path.exists() else (resolve_bundled(path) or path)
+
+
 def _version_callback(value: bool) -> None:
     if value:
         console.print(f"agentguard {__version__}")
@@ -132,7 +140,7 @@ def doctor() -> None:
         except OSError as exc:
             ok = False
             table.add_row(f"write {path}/", "FAIL", str(exc))
-    datasets = Path("datasets/attacks")
+    datasets = _dataset_path("datasets/attacks")
     table.add_row("datasets", "ok" if datasets.exists() else "missing", str(datasets.resolve()))
     console.print(table)
     if not ok:
@@ -342,7 +350,7 @@ def list_attacks(
     """
     from agentguard.attacks.loader import load_cases, select_cases
 
-    paths = datasets or [Path("datasets/attacks"), Path("datasets/benign")]
+    paths = datasets or [_dataset_path("datasets/attacks"), _dataset_path("datasets/benign")]
     try:
         loaded = load_cases([p for p in paths if p.exists()])
     except DatasetError as exc:
@@ -366,7 +374,7 @@ def lint_datasets(
     """Validate datasets: schema, unique ids, OWASP/ATLAS ids, near-duplicates, detectors, counts."""
     from agentguard.attacks.lint import lint_all
 
-    report_ = lint_all(root, enforce_minimums=not no_minimums)
+    report_ = lint_all(_dataset_path(str(root)), enforce_minimums=not no_minimums)
     table = Table(title="dataset counts")
     table.add_column("dataset")
     table.add_column("count", justify="right")
@@ -401,7 +409,7 @@ def calibrate_judge(
     if judge not in {"mock", "anthropic", "openai"}:
         raise _fail("--judge must be mock, anthropic or openai", ExitCode.CONFIG_ERROR)
     try:
-        examples = load_gold_set(gold)
+        examples = load_gold_set(_dataset_path(str(gold)))
         judge_impl = build_judge(JudgeConfig(provider=judge, model=model), offline=False)
     except (DatasetError, ConfigError) as exc:
         raise _fail(exc.message, ExitCode.CONFIG_ERROR) from exc
@@ -475,9 +483,13 @@ def meta_validate(
 # ---------------------------------------------------------------------------------------------- dashboard
 @app.command()
 def dashboard(
-    port: Annotated[int, typer.Option(help="Port to listen on.")] = 8000,
-    host: Annotated[str, typer.Option(help="Interface to bind.")] = "127.0.0.1",
-    db_path: Annotated[str, typer.Option(help="Results database.")] = ".agentguard/agentguard.db",
+    port: Annotated[int, typer.Option(envvar="PORT", help="Port to listen on (env: PORT).")] = 8000,
+    host: Annotated[
+        str, typer.Option(envvar="AGENTGUARD_HOST", help="Interface to bind (env: AGENTGUARD_HOST).")
+    ] = "127.0.0.1",
+    db_path: Annotated[
+        str, typer.Option(envvar="AGENTGUARD_DB", help="Results database (env: AGENTGUARD_DB).")
+    ] = ".agentguard/agentguard.db",
 ) -> None:
     """Serve the results dashboard (FastAPI + HTMX).
 

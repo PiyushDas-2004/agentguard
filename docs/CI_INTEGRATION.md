@@ -26,7 +26,7 @@ jobs:
   redteam:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: PiyushDas-2004/agentguard/.github/actions/agentguard@v1.0.0
         with:
           config: agentguard.yaml       # your config

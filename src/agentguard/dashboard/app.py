@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 from importlib import resources
 from pathlib import Path
 from typing import Any
@@ -34,9 +35,17 @@ def trend_points(runs: list[tuple[str, float]], width: int = 600, height: int = 
 
 
 def create_app(
-    db_path: str | Path = ".agentguard/agentguard.db", transcripts_dir: str | Path = ".agentguard/transcripts"
+    db_path: str | Path = ".agentguard/agentguard.db",
+    transcripts_dir: str | Path = ".agentguard/transcripts",
+    *,
+    banner: str | None = None,
 ) -> FastAPI:
-    """Create the dashboard application bound to a results database."""
+    """Create the dashboard application bound to a results database.
+
+    ``banner`` (default: the ``AGENTGUARD_BANNER`` environment variable) is shown above the runs list,
+    e.g. to explain a public demo deployment.
+    """
+    banner = banner if banner is not None else (os.environ.get("AGENTGUARD_BANNER") or None)
     app = FastAPI(title="AgentGuard dashboard", version=__version__)
     database = Database(db_path)
     store = TranscriptStore(transcripts_dir)
@@ -71,7 +80,7 @@ def create_app(
         rows = database.list_runs(limit=200)
         finished = [r for r in reversed(rows) if r.risk_score is not None]
         points = trend_points([(r.id, float(r.risk_score or 0.0)) for r in finished])
-        return page("index.html.j2", runs=rows, points=points)
+        return page("index.html.j2", runs=rows, points=points, banner=banner)
 
     @app.get("/api/runs")
     def api_runs() -> JSONResponse:
