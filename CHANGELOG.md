@@ -17,6 +17,11 @@ All notable changes to this project are documented here. The format follows
 - `agentguard.netsafe`: SSRF-safe HTTP transport (connect-time address validation, origin
   pinning, no redirects or env proxies, response size cap).
 - CodeQL and Dependabot configuration; CI smoke-tests the web image in production mode.
+- Web app operations: Alembic migrations (run at start-up), timezone-safe timestamps, admin page
+  (health, usage, users, disable/enable, password reset, security events, client-IP check),
+  change-password page, JSON logs with request ids, optional Sentry alerts with secret
+  scrubbing, CI job running the web tests on Postgres 16.
+- Beginner deployment guide: `docs/RENDER_SETUP_GUIDE.md`.
 
 ### Security
 - Hardening from an independent review of the web app: 64 KiB request-body limit (declared and

@@ -15,6 +15,7 @@ import json
 import logging
 import re
 import time
+import traceback
 from datetime import timedelta
 from typing import Any
 
@@ -139,6 +140,10 @@ class ScanManager:
         if task is not None:
             task.cancel()
 
+    def running_count(self) -> int:
+        """Scans currently executing (for the admin health panel)."""
+        return len(self._tasks)
+
     def holds_secret_for(self, scan_id: str) -> bool:
         """Whether secrets for ``scan_id`` are still held (tests/diagnostics)."""
         return scan_id in self._secrets
@@ -208,6 +213,7 @@ class ScanManager:
         if not done:
             await _stop(scan_task)
             message = f"The scan exceeded the {self.settings.max_scan_minutes:g}-minute limit and was stopped."
+            logger.warning("scan %s stopped by the time limit", scan_id, extra={"scan_id": scan_id})
             self._update(scan_id, status="failed", finished_at=utcnow(), error=message)
             self._audit(user_id, "scan_timeout", scan_id)
             return
@@ -215,7 +221,10 @@ class ScanManager:
             result = scan_task.result()
         except (Exception, asyncio.CancelledError) as exc:
             message = redact(f"{type(exc).__name__}: {exc}", *secrets.values())[:900]
-            logger.warning("scan %s failed: %s", scan_id, message)
+            # error level: reaches Sentry when configured. Only frame locations are logged, never
+            # the traceback text or locals, which could contain the user's secrets.
+            where = " <- ".join(f"{f.name}:{f.lineno}" for f in reversed(traceback.extract_tb(exc.__traceback__)[-6:]))
+            logger.error("scan %s failed: %s (at %s)", scan_id, message, where, extra={"scan_id": scan_id})
             self._update(scan_id, status="failed", finished_at=utcnow(), error=message)
             self._audit(user_id, "scan_failed", scan_id)
             return

@@ -19,6 +19,7 @@ from sqlmodel import Session, select
 from agentguard.web.app import create_web_app
 from agentguard.web.models import Scan, Target, User
 from agentguard.web.settings import WebSettings
+from tests.integration.webdb import fresh_database_url
 
 PASSWORD = "correct horse battery"
 AGENT_SECRET = "agent-credential-value-0123456789"
@@ -81,7 +82,7 @@ def agent() -> Iterator[Agent]:
 def _settings(**overrides: Any) -> WebSettings:
     values: dict[str, Any] = {
         "env": "test",
-        "database_url": "sqlite:///:memory:",
+        "database_url": fresh_database_url(),
         "base_url": "http://testserver",
         "signup_code": "invite-code-for-tests",
         "allow_private_targets": True,
@@ -551,3 +552,109 @@ def test_cancelling_a_running_scan_stops_it(client: TestClient, agent: Agent) ->
         assert stored.status == "cancelled"
         assert stored.result_json is None
     assert not client.app.state.manager.holds_secret_for(scan_id)  # type: ignore[attr-defined]
+
+
+# ---------------------------------------------------------------------------- administration
+def test_admin_area_and_user_disabling(agent: Agent) -> None:
+    app = create_web_app(_settings(admin_emails=frozenset({"admin@example.com"})))
+    with TestClient(app) as admin:
+        admin_csrf = signup(admin, "admin@example.com")
+        other = TestClient(app)
+        other_csrf = signup(other, "bob@example.com")
+        assert other.get("/admin").status_code == 404  # not advertised to normal users
+        assert 'href="/admin"' not in other.get("/account").text
+
+        page = admin.get("/admin")
+        assert page.status_code == 200
+        assert "bob@example.com" in page.text
+        assert "Health" in page.text
+        assert 'href="/admin"' in admin.get("/account").text
+        with Session(app.state.engine) as session:
+            bob = session.exec(select(User).where(User.email == "bob@example.com")).one()
+            me = session.exec(select(User).where(User.email == "admin@example.com")).one()
+        assert admin.post(f"/admin/users/{bob.id}/disable").status_code == 403  # CSRF required
+        assert admin.post(f"/admin/users/{me.id}/disable", data={"csrf_token": admin_csrf}).status_code == 400
+
+        target_id = add_target(other, other_csrf, agent.url)
+        assert target_id > 0
+        done = admin.post(f"/admin/users/{bob.id}/disable", data={"csrf_token": admin_csrf}, follow_redirects=False)
+        assert done.status_code == 303
+        # signed out everywhere ...
+        assert other.get("/targets", follow_redirects=False).status_code == 303
+        # ... and cannot sign in; the reason is shown only with the correct password
+        other.cookies.clear()
+        token = csrf_of(other.get("/login").text)
+        wrong = other.post(
+            "/login", data={"email": "bob@example.com", "password": "not-the-password", "csrf_token": token}
+        )
+        assert wrong.status_code == 400
+        assert "disabled" not in wrong.text
+        right = other.post("/login", data={"email": "bob@example.com", "password": PASSWORD, "csrf_token": token})
+        assert right.status_code == 403
+        assert "disabled" in right.text
+
+        assert admin.post(f"/admin/users/{bob.id}/enable", data={"csrf_token": admin_csrf}).status_code == 200
+        again = other.post(
+            "/login",
+            data={"email": "bob@example.com", "password": PASSWORD, "csrf_token": token},
+            follow_redirects=False,
+        )
+        assert again.status_code == 303
+        events = admin.get("/admin").text
+        assert "admin_disable_user" in events
+        assert "admin_enable_user" in events
+
+
+def test_admin_emails_from_environment() -> None:
+    from agentguard.web.settings import load_settings
+
+    settings = load_settings({"AGENTGUARD_ADMIN_EMAILS": " Admin@Example.com, ops@example.com ,"})
+    assert settings.admin_emails == frozenset({"admin@example.com", "ops@example.com"})
+
+
+def test_change_password_and_admin_reset(agent: Agent) -> None:
+    app = create_web_app(_settings(admin_emails=frozenset({"admin@example.com"})))
+    with TestClient(app) as admin:
+        admin_csrf = signup(admin, "admin@example.com")
+        user = TestClient(app)
+        csrf = signup(user, "carol@example.com")
+        second_device = TestClient(app)
+        token = csrf_of(second_device.get("/login").text)
+        second_device.post("/login", data={"email": "carol@example.com", "password": PASSWORD, "csrf_token": token})
+        assert second_device.get("/account", follow_redirects=False).status_code == 200
+
+        bad = user.post(
+            "/account/password",
+            data={"current_password": "wrong-password!", "new_password": "x" * 20, "csrf_token": csrf},
+        )
+        assert bad.status_code == 400
+        weak = user.post(
+            "/account/password", data={"current_password": PASSWORD, "new_password": "short", "csrf_token": csrf}
+        )
+        assert weak.status_code == 400
+        new_password = "a brand new passphrase"
+        ok = user.post(
+            "/account/password", data={"current_password": PASSWORD, "new_password": new_password, "csrf_token": csrf}
+        )
+        assert ok.status_code == 200
+        assert "Password changed" in ok.text
+        assert user.get("/account", follow_redirects=False).status_code == 200  # this device stays signed in
+        assert second_device.get("/account", follow_redirects=False).status_code == 303  # others signed out
+
+        with Session(app.state.engine) as session:
+            carol = session.exec(select(User).where(User.email == "carol@example.com")).one()
+        reset = admin.post(f"/admin/users/{carol.id}/reset-password", data={"csrf_token": admin_csrf})
+        assert reset.status_code == 200
+        temporary = re.search(r"carol@example.com</strong>:\s*<code>([^<]+)</code>", reset.text)
+        assert temporary is not None
+        assert user.get("/account", follow_redirects=False).status_code == 303  # reset signs the user out
+        token = csrf_of(user.get("/login").text)
+        old = user.post("/login", data={"email": "carol@example.com", "password": new_password, "csrf_token": token})
+        assert old.status_code == 400
+        fresh = user.post(
+            "/login",
+            data={"email": "carol@example.com", "password": temporary.group(1), "csrf_token": token},
+            follow_redirects=False,
+        )
+        assert fresh.status_code == 303
+        assert user.post(f"/admin/users/{carol.id}/reset-password", data={"csrf_token": csrf}).status_code == 404

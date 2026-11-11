@@ -208,3 +208,19 @@ async def test_body_size_limit_rejects_declared_and_streamed_bodies() -> None:
     assert await _call(app, [b"x" * 10], 10) == 200
     assert await _call(app, [b"x" * 10], 5000) == 413  # declared too large: refused before reading
     assert await _call(app, [b"x" * 600, b"x" * 600], None) == 413  # chunked/streamed past the limit
+
+
+def test_client_ip_header_option() -> None:
+    request = Request(
+        {
+            "type": "http",
+            "headers": [(b"true-client-ip", b"198.51.100.4"), (b"x-forwarded-for", b"203.0.113.9")],
+            "client": ("10.0.0.2", 1234),
+            "method": "GET",
+            "path": "/",
+        }
+    )
+    assert client_ip(request, 1, "True-Client-IP") == "198.51.100.4"
+    assert client_ip(request, 1) == "203.0.113.9"
+    bogus = _request("10.0.0.2", "203.0.113.9")
+    assert client_ip(bogus, 1, "True-Client-IP") == "203.0.113.9"  # header missing: falls back

@@ -112,8 +112,19 @@ def constant_time_equals(a: str | None, b: str | None) -> bool:
     return hmac.compare_digest(a.encode("utf-8"), b.encode("utf-8"))
 
 
-def client_ip(request: Request, trusted_hops: int) -> str:
-    """Client IP, honouring ``X-Forwarded-For`` only for ``trusted_hops`` reverse proxies."""
+def client_ip(request: Request, trusted_hops: int, header: str | None = None) -> str:
+    """Client IP for rate limiting and audit.
+
+    ``header`` (e.g. ``True-Client-IP``) is used when the operator configured it and it holds a
+    valid address; otherwise ``X-Forwarded-For`` is honoured only for ``trusted_hops`` reverse
+    proxies (the right-most entries, which clients cannot forge), else the socket peer.
+    """
+    if header:
+        value = request.headers.get(header, "").strip()
+        try:
+            return str(ipaddress.ip_address(value))
+        except ValueError:
+            pass
     peer = request.client.host if request.client else ""
     if trusted_hops <= 0:
         return peer

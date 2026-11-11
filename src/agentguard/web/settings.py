@@ -37,6 +37,16 @@ class WebSettings(BaseModel):
     request_timeout_seconds: float = Field(default=30.0, gt=0, le=120)
     retention_days: int = Field(default=30, ge=1, le=3650)
     max_scan_minutes: int = Field(default=30, ge=1, le=24 * 60)
+    admin_emails: frozenset[str] = frozenset()  # accounts with access to /admin
+    client_ip_header: str = Field(default="", max_length=64, pattern=r"^[A-Za-z0-9-]*$")
+    sentry_dsn: SecretStr | None = Field(default=None, repr=False)  # optional error alerts
+    log_format: Literal["json", "text", ""] = ""  # default: json in production, text otherwise
+
+    @property
+    def json_logs(self) -> bool:
+        """Whether logs are written as JSON lines."""
+        return self.log_format == "json" or (self.log_format == "" and self.production)
+
     trusted_proxy_hops: int = Field(default=1, ge=0, le=5)
 
     @property
@@ -86,6 +96,10 @@ _ENV = {
     "target_requests_per_second": "AGENTGUARD_TARGET_RPS",
     "retention_days": "AGENTGUARD_RETENTION_DAYS",
     "max_scan_minutes": "AGENTGUARD_MAX_SCAN_MINUTES",
+    "admin_emails": "AGENTGUARD_ADMIN_EMAILS",
+    "client_ip_header": "AGENTGUARD_CLIENT_IP_HEADER",
+    "sentry_dsn": "SENTRY_DSN",
+    "log_format": "AGENTGUARD_LOG_FORMAT",
     "trusted_proxy_hops": "AGENTGUARD_TRUSTED_PROXY_HOPS",
 }
 
@@ -106,6 +120,10 @@ def load_settings(environ: dict[str, str] | None = None) -> WebSettings:
             value.strip().lower() in {"1", "true", "yes"}
             if field in {"open_signup", "allow_private_targets", "allow_http_targets"}
             else value
+        )
+    if "admin_emails" in data:
+        data["admin_emails"] = frozenset(
+            part.strip().lower() for part in str(data["admin_emails"]).split(",") if part.strip()
         )
     if "base_url" not in data and source.get("RENDER_EXTERNAL_URL"):
         data["base_url"] = source["RENDER_EXTERNAL_URL"]  # set automatically by Render

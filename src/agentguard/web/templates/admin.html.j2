@@ -1,0 +1,69 @@
+{% extends "base.html.j2" %}{% block title %}Admin · AgentGuard{% endblock %}
+{% block body %}
+<h1>Administration</h1>
+{% if reset %}<div class="panel"><p class="success" role="status">Temporary password for <strong>{{ reset.email }}</strong>:
+<code>{{ reset.password }}</code></p><p class="hint">It is shown only once. Give it to the user privately and ask them to
+change it on their Account page after signing in.</p></div>{% endif %}
+<div class="panel">
+<h2>Health</h2>
+<div class="grid">
+<div><strong>Version</strong><br>{{ health.version }}</div>
+<div><strong>Up for</strong><br>{{ health.uptime }}</div>
+<div><strong>Database</strong><br>{{ health.database }}</div>
+<div><strong>Scans running / queued</strong><br>{{ health.running }} of {{ health.workers }} / {{ health.queued }}</div>
+</div>
+<h2>Scans in the last 24 hours</h2>
+{% if status_24h %}<p>{% for status, count in status_24h.items() %}<span class="badge {{ 'ok' if status == 'completed' else ('bad' if status == 'failed' else 'warn') }}">{{ status }}: {{ count }}</span> {% endfor %}</p>
+{% else %}<p class="muted">No scans.</p>{% endif %}
+{% if recent_failures %}
+<table><tr><th>When</th><th>User</th><th>Error</th></tr>
+{% for s in recent_failures %}<tr><td>{{ s.created_at.strftime('%Y-%m-%d %H:%M') }}</td><td>{{ emails.get(s.user_id, '—') }}</td><td>{{ s.error[:200] }}</td></tr>{% endfor %}
+</table>{% endif %}
+</div>
+
+{% if connection %}<div class="panel">
+<h2>Connection check</h2>
+<p>AgentGuard sees your IP address as <strong><code>{{ connection.seen_ip }}</code></strong>.
+Compare it with your real public IP (search the web for "what is my IP"). If they match, per-user rate limits work correctly.</p>
+<details><summary>Details for troubleshooting</summary>
+<table>
+<tr><th>Setting / header</th><th>Value</th></tr>
+<tr><td>AGENTGUARD_TRUSTED_PROXY_HOPS</td><td>{{ connection.hops }}</td></tr>
+<tr><td>AGENTGUARD_CLIENT_IP_HEADER</td><td>{{ connection.header_setting or '(not set)' }}</td></tr>
+<tr><td>socket peer</td><td><code>{{ connection.peer }}</code></td></tr>
+{% for name, value in connection.headers.items() %}<tr><td>{{ name }}</td><td><code>{{ value or '—' }}</code></td></tr>{% endfor %}
+</table>
+<p class="hint">If the address above is not yours but your IP appears in <code>true-client-ip</code> or <code>cf-connecting-ip</code>,
+set <code>AGENTGUARD_CLIENT_IP_HEADER</code> to that header name. If it appears in <code>x-forwarded-for</code>, set
+<code>AGENTGUARD_TRUSTED_PROXY_HOPS</code> to its position counted from the right (1 = last).</p>
+</details>
+</div>{% endif %}
+
+<div class="panel">
+<h2>Users ({{ users | length }})</h2>
+<table><tr><th>E-mail</th><th>Joined</th><th>Targets</th><th>Scans (30 d)</th><th>Failed sign-ins</th><th>Status</th><th></th></tr>
+{% for u in users %}<tr>
+<td>{{ u.email }}{% if u.email in admin_emails %} <span class="badge ok">admin</span>{% endif %}</td>
+<td>{{ u.created_at.strftime('%Y-%m-%d') }}</td>
+<td>{{ targets_by_user.get(u.id, 0) }}</td>
+<td>{{ scans_30d.get(u.id, 0) }}</td>
+<td>{{ u.failed_logins }}</td>
+<td>{% if u.disabled_at %}<span class="badge bad">disabled</span>{% else %}<span class="badge ok">active</span>{% endif %}</td>
+<td>{% if u.id != user.id %}
+<form class="inline" method="post" action="/admin/users/{{ u.id }}/{{ 'enable' if u.disabled_at else 'disable' }}">
+<input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+<button class="{{ 'secondary' if u.disabled_at else 'danger' }}" type="submit">{{ 'Enable' if u.disabled_at else 'Disable' }}</button></form>
+<form class="inline" method="post" action="/admin/users/{{ u.id }}/reset-password">
+<input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button class="secondary" type="submit">Reset password</button></form>
+{% endif %}</td>
+</tr>{% endfor %}</table>
+<p class="hint">Disabling signs the user out everywhere and cancels their running scans. Their data is kept; they can be enabled again.</p>
+</div>
+
+<div class="panel">
+<h2>Recent security events</h2>
+<table><tr><th>When (UTC)</th><th>User</th><th>Event</th><th>IP</th><th>Detail</th></tr>
+{% for e in events %}<tr><td>{{ e.created_at.strftime('%Y-%m-%d %H:%M:%S') }}</td><td>{{ emails.get(e.user_id, '—') if e.user_id else '—' }}</td>
+<td><code>{{ e.event }}</code></td><td>{{ e.ip }}</td><td>{{ e.detail[:120] }}</td></tr>{% endfor %}</table>
+</div>
+{% endblock %}

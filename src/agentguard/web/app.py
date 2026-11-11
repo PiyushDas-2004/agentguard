@@ -13,6 +13,7 @@ import contextlib
 import hashlib
 import logging
 import re
+import time
 import uuid
 from collections.abc import AsyncIterator
 from datetime import timedelta
@@ -23,8 +24,8 @@ from fastapi import Depends, FastAPI, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
 from jinja2 import Environment, PackageLoader, select_autoescape
 from jsonpath_ng.parser import parse as jsonpath_parse
-from sqlalchemy import Engine, text
-from sqlmodel import Session, SQLModel, col, create_engine, func, select
+from sqlalchemy import text
+from sqlmodel import Session, col, func, select
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from agentguard.core.types import RunResult, utcnow
@@ -32,8 +33,10 @@ from agentguard.harness.canary import make_canary
 from agentguard.netsafe import NetPolicy, UnsafeURLError, check_url, origin_of
 from agentguard.reporting.writer import EXTENSIONS, RENDERERS
 from agentguard.version import __version__
+from agentguard.web.db import make_engine, upgrade
 from agentguard.web.jobs import ScanManager, validate_hosted_template
 from agentguard.web.models import AuditEvent, Scan, Target, User, UserSession
+from agentguard.web.observability import RequestLogMiddleware
 from agentguard.web.scans import HOSTED_CATEGORIES, REQUEST_PRESETS, ScanSecrets
 from agentguard.web.security import (
     BodySizeLimitMiddleware,
@@ -64,26 +67,11 @@ LOGIN_GLOBAL_PER_MINUTE = 600  # all sign-ins; with the argon2 concurrency cap t
 MAX_BODY_BYTES = 64 * 1024
 
 
-def _engine(settings: WebSettings) -> Engine:
-    url = settings.database_url
-    if url.startswith("sqlite"):
-        if url.startswith("sqlite:///") and url != "sqlite:///:memory:":
-            from pathlib import Path
-
-            Path(url.removeprefix("sqlite:///")).parent.mkdir(parents=True, exist_ok=True)
-        if url == "sqlite:///:memory:":
-            from sqlalchemy.pool import StaticPool
-
-            return create_engine(url, connect_args={"check_same_thread": False}, poolclass=StaticPool)
-        return create_engine(url, connect_args={"check_same_thread": False})
-    return create_engine(url, pool_pre_ping=True, pool_size=5, max_overflow=5)
-
-
 def create_web_app(settings: WebSettings | None = None) -> FastAPI:
     """Create the hosted application (settings default to environment variables)."""
     settings = settings or load_settings()
-    engine = _engine(settings)
-    SQLModel.metadata.create_all(engine)
+    engine = make_engine(settings.database_url)
+    upgrade(engine)  # Alembic migrations: creates or updates the schema
     manager = ScanManager(engine, settings)
     limiter = RateLimiter()
     templates = Environment(
@@ -92,6 +80,7 @@ def create_web_app(settings: WebSettings | None = None) -> FastAPI:
     session_cookie = "__Host-ag_session" if settings.secure_cookies else "ag_session"
     csrf_cookie = "__Host-ag_csrf" if settings.secure_cookies else "ag_csrf"
     base_origin = origin_of(settings.base_url)
+    started_monotonic = time.monotonic()
 
     @contextlib.asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
@@ -107,7 +96,8 @@ def create_web_app(settings: WebSettings | None = None) -> FastAPI:
         title="AgentGuard", version=__version__, docs_url=None, redoc_url=None, openapi_url=None, lifespan=lifespan
     )
     app.add_middleware(SecurityHeadersMiddleware, hsts=settings.production)
-    app.add_middleware(BodySizeLimitMiddleware, max_bytes=MAX_BODY_BYTES)  # outermost: runs first
+    app.add_middleware(BodySizeLimitMiddleware, max_bytes=MAX_BODY_BYTES)
+    app.add_middleware(RequestLogMiddleware)  # outermost: logs every response, including 413s
     app.state.manager = manager
     app.state.settings = settings
     app.state.engine = engine
@@ -118,7 +108,7 @@ def create_web_app(settings: WebSettings | None = None) -> FastAPI:
         return Session(engine)
 
     def ip_of(request: Request) -> str:
-        return rate_key(client_ip(request, settings.trusted_proxy_hops))
+        return rate_key(client_ip(request, settings.trusted_proxy_hops, settings.client_ip_header or None))
 
     def audit(user_id: int | None, event: str, request: Request, detail: str = "") -> None:
         with db() as session:
@@ -133,17 +123,19 @@ def create_web_app(settings: WebSettings | None = None) -> FastAPI:
             row = session.get(UserSession, hash_token(token))
             if row is None:
                 return None
-            expires = row.expires_at if row.expires_at.tzinfo else row.expires_at.replace(tzinfo=utcnow().tzinfo)
-            if expires < utcnow():
+            if row.expires_at < utcnow():  # UTCDateTime: always timezone-aware
                 session.delete(row)
                 session.commit()
                 return None
             user = session.get(User, row.user_id)
-            if user is None:
+            if user is None or user.disabled_at is not None:
                 return None
             session.expunge(row)
             session.expunge(user)
             return row, user
+
+    def is_admin(user: User) -> bool:
+        return user.email.lower() in settings.admin_emails and user.disabled_at is None
 
     def require_user(request: Request) -> tuple[UserSession, User]:
         found = current(request)
@@ -152,6 +144,14 @@ def create_web_app(settings: WebSettings | None = None) -> FastAPI:
         return found
 
     Auth = Annotated[tuple[UserSession, User], Depends(require_user)]  # noqa: N806 - type alias
+
+    def require_admin(request: Request) -> tuple[UserSession, User]:
+        found = require_user(request)
+        if not is_admin(found[1]):
+            raise HTTPException(status_code=404)  # the admin area is not advertised to other users
+        return found
+
+    Admin = Annotated[tuple[UserSession, User], Depends(require_admin)]  # noqa: N806 - type alias
 
     def render(request: Request, name: str, status_code: int = 200, **context: Any) -> HTMLResponse:
         found = current(request)
@@ -165,6 +165,7 @@ def create_web_app(settings: WebSettings | None = None) -> FastAPI:
         response = HTMLResponse(
             templates.get_template(name).render(
                 user=found[1] if found else None,
+                is_admin=bool(found and is_admin(found[1])),
                 csrf_token=csrf,
                 nonce=request.state.csp_nonce,
                 version=__version__,
@@ -367,11 +368,20 @@ def create_web_app(settings: WebSettings | None = None) -> FastAPI:
                 session.commit()
             if ok and user is not None:
                 user.failed_logins = 0
-                user.locked_until = None
                 session.add(user)
                 session.commit()
                 session.refresh(user)
                 session.expunge(user)
+        if ok and user is not None and user.disabled_at is not None:
+            # Revealed only after the correct password, so it does not help enumerate accounts.
+            audit(user.id, "login_disabled", request)
+            return render(
+                request,
+                "login.html.j2",
+                status_code=403,
+                email=email,
+                error="This account has been disabled. Contact the administrator.",
+            )
         if not ok or user is None:
             if user_id is not None:  # unknown e-mails leave no row: unauthenticated callers cannot grow the table
                 audit(user_id, "login_failed", request)
@@ -806,6 +816,38 @@ def create_web_app(settings: WebSettings | None = None) -> FastAPI:
     def account(request: Request, auth: Auth) -> Response:
         return render(request, "account.html.j2", error=None)
 
+    @app.post("/account/password")
+    def change_password(
+        request: Request,
+        auth: Auth,
+        current_password: Annotated[str, Form(max_length=256)] = "",
+        new_password: Annotated[str, Form(max_length=256)] = "",
+        csrf_token: Annotated[str, Form(max_length=200)] = "",
+    ) -> Response:
+        row, user = auth
+        check_csrf(request, csrf_token, row.csrf_token)
+        if not limiter.allow(f"password-change:{user.id}", 10, 3600):
+            raise HTTPException(status_code=429, detail="Too many attempts. Try again later.")
+        if not verify_password(user.password_hash, current_password):
+            return render(request, "account.html.j2", status_code=400, error="Current password is incorrect.")
+        problem = password_problem(new_password, user.email)
+        if problem:
+            return render(request, "account.html.j2", status_code=400, error=problem)
+        with db() as session:
+            stored = session.get(User, user.id)
+            if stored is None:
+                raise HTTPException(status_code=404)
+            stored.password_hash = hash_password(new_password)
+            session.add(stored)
+            for other in session.exec(select(UserSession).where(UserSession.user_id == user.id)).all():
+                if other.id != row.id:
+                    session.delete(other)  # sign out every other device
+            session.commit()
+        audit(user.id, "password_changed", request)
+        return render(
+            request, "account.html.j2", error=None, message="Password changed. Other devices were signed out."
+        )
+
     @app.post("/account/delete")
     def delete_account(
         request: Request,
@@ -831,5 +873,132 @@ def create_web_app(settings: WebSettings | None = None) -> FastAPI:
         response = RedirectResponse("/", status_code=303)
         response.delete_cookie(session_cookie, path="/")
         return response
+
+    # ------------------------------------------------------------------ administration
+    @app.get("/admin", response_class=HTMLResponse)
+    def admin_home(request: Request, auth: Admin) -> Response:
+        connection = {
+            "seen_ip": client_ip(request, settings.trusted_proxy_hops, settings.client_ip_header or None),
+            "headers": {
+                name: request.headers.get(name, "")[:200]
+                for name in ("x-forwarded-for", "true-client-ip", "cf-connecting-ip", "x-real-ip")
+            },
+            "peer": request.client.host if request.client else "",
+            "hops": settings.trusted_proxy_hops,
+            "header_setting": settings.client_ip_header,
+        }
+        return render(request, "admin.html.j2", connection=connection, **admin_overview())
+
+    def admin_overview() -> dict[str, Any]:
+        now = utcnow()
+        day_ago, month_ago = now - timedelta(days=1), now - timedelta(days=30)
+        with db() as session:
+            users = session.exec(select(User).order_by(col(User.created_at).desc()).limit(500)).all()
+            scans_30d = dict(
+                session.exec(
+                    select(Scan.user_id, func.count()).where(col(Scan.created_at) >= month_ago).group_by(Scan.user_id)  # type: ignore[arg-type]
+                ).all()
+            )
+            targets_by_user = dict(
+                session.exec(select(Target.user_id, func.count()).group_by(Target.user_id)).all()  # type: ignore[arg-type]
+            )
+            status_24h = dict(
+                session.exec(
+                    select(Scan.status, func.count()).where(col(Scan.created_at) >= day_ago).group_by(Scan.status)
+                ).all()
+            )
+            recent_failures = session.exec(
+                select(Scan)
+                .where(Scan.status == "failed", col(Scan.created_at) >= day_ago)
+                .order_by(col(Scan.created_at).desc())
+                .limit(20)
+            ).all()
+            events = session.exec(select(AuditEvent).order_by(col(AuditEvent.created_at).desc()).limit(100)).all()
+            emails = {u.id: u.email for u in users}
+            for item in [*users, *recent_failures, *events]:
+                session.expunge(item)
+        return {
+            "users": users,
+            "scans_30d": scans_30d,
+            "targets_by_user": targets_by_user,
+            "status_24h": status_24h,
+            "recent_failures": recent_failures,
+            "events": events,
+            "emails": emails,
+            "health": {
+                "version": __version__,
+                "uptime": str(timedelta(seconds=int(time.monotonic() - started_monotonic))),
+                "queued": manager.queue.qsize(),
+                "running": manager.running_count(),
+                "workers": settings.max_concurrent_scans,
+                "database": "PostgreSQL" if engine.dialect.name == "postgresql" else engine.dialect.name,
+            },
+            "admin_emails": settings.admin_emails,
+        }
+
+    @app.post("/admin/users/{user_id}/disable")
+    def admin_disable(
+        request: Request, user_id: int, auth: Admin, csrf_token: Annotated[str, Form(max_length=200)] = ""
+    ) -> Response:
+        row, admin = auth
+        check_csrf(request, csrf_token, row.csrf_token)
+        if user_id == admin.id:
+            raise HTTPException(status_code=400, detail="You cannot disable your own account.")
+        with db() as session:
+            user = session.get(User, user_id)
+            if user is None:
+                raise HTTPException(status_code=404)
+            if user.disabled_at is None:
+                user.disabled_at = utcnow()
+                session.add(user)
+            for stored in session.exec(select(UserSession).where(UserSession.user_id == user_id)).all():
+                session.delete(stored)  # signs the user out everywhere
+            for scan in session.exec(
+                select(Scan).where(Scan.user_id == user_id, col(Scan.status).in_(["queued", "running"]))
+            ).all():
+                manager.cancel(scan.id)
+                scan.status, scan.error, scan.finished_at = "cancelled", "Cancelled by an administrator.", utcnow()
+                session.add(scan)
+            session.commit()
+        audit(admin.id, "admin_disable_user", request, f"user {user_id}")
+        return RedirectResponse("/admin", status_code=303)
+
+    @app.post("/admin/users/{user_id}/reset-password", response_class=HTMLResponse)
+    def admin_reset_password(
+        request: Request, user_id: int, auth: Admin, csrf_token: Annotated[str, Form(max_length=200)] = ""
+    ) -> Response:
+        row, admin = auth
+        check_csrf(request, csrf_token, row.csrf_token)
+        temporary = new_token(12)  # 16 URL-safe characters, shown once and never stored
+        with db() as session:
+            user = session.get(User, user_id)
+            if user is None:
+                raise HTTPException(status_code=404)
+            user.password_hash = hash_password(temporary)
+            session.add(user)
+            for stored in session.exec(select(UserSession).where(UserSession.user_id == user_id)).all():
+                session.delete(stored)
+            session.commit()
+            email = user.email
+        audit(admin.id, "admin_reset_password", request, f"user {user_id}")
+        return render(
+            request, "admin.html.j2", connection=None, reset={"email": email, "password": temporary}, **admin_overview()
+        )
+
+    @app.post("/admin/users/{user_id}/enable")
+    def admin_enable(
+        request: Request, user_id: int, auth: Admin, csrf_token: Annotated[str, Form(max_length=200)] = ""
+    ) -> Response:
+        row, admin = auth
+        check_csrf(request, csrf_token, row.csrf_token)
+        with db() as session:
+            user = session.get(User, user_id)
+            if user is None:
+                raise HTTPException(status_code=404)
+            user.disabled_at = None
+            session.add(user)
+            session.commit()
+        audit(admin.id, "admin_enable_user", request, f"user {user_id}")
+        return RedirectResponse("/admin", status_code=303)
 
     return app

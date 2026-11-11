@@ -11,6 +11,8 @@ AgentGuard is a CLI, a read-only results **dashboard**, and a hosted multi-user 
 database. Render generates `AGENTGUARD_SECRET_KEY` and `AGENTGUARD_SIGNUP_CODE`; the public URL
 (`RENDER_EXTERNAL_URL`) becomes the base URL automatically.
 
+**Beginners: follow [RENDER_SETUP_GUIDE.md](RENDER_SETUP_GUIDE.md), which explains every click.**
+
 1. Click the button, sign in to Render, approve the blueprint (a web service + a database).
 2. When the deploy is live, open the service → **Environment** and copy `AGENTGUARD_SIGNUP_CODE`.
    Share it with the people who should be able to create accounts (or set
@@ -44,7 +46,43 @@ and free Postgres databases expire after 30 days unless upgraded. Upgrade both f
 | `AGENTGUARD_TARGET_RPS` | `2` | requests per second sent to a target |
 | `AGENTGUARD_RETENTION_DAYS` | `30` | scans and audit events older than this are deleted (hourly) |
 | `AGENTGUARD_MAX_SCAN_MINUTES` | `30` | total time limit per scan |
+| `AGENTGUARD_ADMIN_EMAILS` | — | comma-separated e-mails of accounts that may open `/admin` |
+| `AGENTGUARD_CLIENT_IP_HEADER` | — | header holding the client IP if your proxy sets one (e.g. `True-Client-IP`); see the admin page's *Connection check* |
+| `SENTRY_DSN` | — | enables e-mail alerts for errors via Sentry (secrets are scrubbed) |
+| `AGENTGUARD_LOG_FORMAT` | `json` in production | `json` or `text` |
+| `PORT` | `8000` (`10000` in `render.yaml`) | listen port |
 | `AGENTGUARD_SESSION_HOURS` | `12` | session lifetime |
+
+### Database migrations
+
+The schema is managed with Alembic (`src/agentguard/web/migrations/`). Every start-up runs
+`upgrade head`, so deploying a new version updates the database automatically. When you change
+`src/agentguard/web/models.py`, add a migration:
+
+```bash
+uv run python - <<'EOF'
+from alembic import command
+from agentguard.web.db import alembic_config, make_engine, upgrade
+engine = make_engine("sqlite:///.agentguard/migrate.db"); upgrade(engine)
+cfg = alembic_config()
+with engine.begin() as connection:
+    cfg.attributes["connection"] = connection
+    command.revision(cfg, message="describe the change", autogenerate=True)
+EOF
+```
+
+Review the generated file, then run the tests: `tests/integration/test_web_migrations.py` fails
+if the models and the migrations disagree. CI runs the web tests on SQLite and on Postgres 16.
+
+### Operations
+
+* **Admin page** (`/admin`, for `AGENTGUARD_ADMIN_EMAILS`): health (version, uptime, database,
+  running/queued scans), scans and failures in the last 24 hours, users with per-user usage,
+  disable/enable and password reset, recent security events, and a *Connection check* that shows
+  which client IP the app sees.
+* **Logs**: one JSON object per line with a `request_id` (also returned as `X-Request-ID`).
+  Query strings, request bodies and secrets are never logged.
+* **Alerts**: set `SENTRY_DSN` to get e-mails for errors; add an uptime monitor on `/healthz`.
 
 The security design is described in [HOSTED_SECURITY.md](HOSTED_SECURITY.md). Run one instance
 only (in-memory queue and rate limiter; secrets are never persisted).

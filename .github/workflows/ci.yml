@@ -49,6 +49,31 @@ jobs:
       - name: Dataset lint
         run: uv run agentguard lint-datasets
 
+  web-postgres:
+    name: web app on Postgres 16
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: agentguard
+          POSTGRES_DB: agentguard_test
+          POSTGRES_HOST_AUTH_METHOD: trust  # throw-away CI database, reachable only from this job
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U agentguard" --health-interval 5s --health-timeout 5s --health-retries 12
+    env:
+      AGENTGUARD_TEST_DATABASE_URL: postgresql+psycopg://agentguard@localhost:5432/agentguard_test
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10.3.3
+        with:
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+      - run: uv sync --locked
+      - name: Web app tests and migrations against Postgres
+        run: uv run pytest tests/integration/test_web_app.py tests/integration/test_web_migrations.py -q
+
   security:
     runs-on: ubuntu-latest
     steps:

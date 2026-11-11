@@ -527,8 +527,19 @@ def serve(
         settings = load_settings()
     except ConfigError as exc:
         raise _fail(str(exc), ExitCode.CONFIG_ERROR) from exc
+    from agentguard.version import __version__
+    from agentguard.web.observability import configure_logging, init_sentry
+
+    configure_logging(json_logs=settings.json_logs)
+    init_sentry(
+        settings.sentry_dsn.get_secret_value() if settings.sentry_dsn else None,
+        environment=settings.env,
+        release=__version__,
+    )
     uvicorn.run(
         create_web_app(settings),
+        log_config=None,  # keep the redacting handlers configured above
+        access_log=False,  # replaced by the request log (which omits query strings)
         host=host,
         port=port,
         log_level="info",

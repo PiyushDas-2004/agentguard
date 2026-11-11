@@ -48,6 +48,7 @@ Want the passing case? `uv run agentguard run -c examples/demo_hardened.yaml --o
 
 ## Hosting
 
+* **New to hosting? Start here:** [docs/RENDER_SETUP_GUIDE.md](docs/RENDER_SETUP_GUIDE.md), a click-by-click guide for beginners.
 * **Hosted web app (for other people):** [![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/PiyushDas-2004/agentguard)
   — accounts, endpoint-ownership verification, scans from the browser, reports and SARIF/JUnit downloads.
   Works without any LLM key (deterministic detectors); users can add a Gemini judge with **their own** key,

@@ -3,10 +3,16 @@
 <h1>Account</h1>
 <div class="panel"><p>Signed in as <strong>{{ user.email }}</strong>.</p>
 <p class="muted">Scans are deleted automatically after {{ settings.retention_days }} days. API keys and agent credentials are never stored.</p></div>
-<div class="panel"><h2>Delete account</h2>
 {% if error %}<p class="error" role="alert">{{ error }}</p>{% endif %}
+{% if message %}<p class="success" role="status">{{ message }}</p>{% endif %}
+<div class="panel"><h2>Change password</h2>
+<form method="post" action="/account/password"><input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+<label for="current_password">Current password</label><input id="current_password" type="password" name="current_password" required autocomplete="current-password">
+<label for="new_password">New password <span class="hint">(at least 12 characters)</span></label><input id="new_password" type="password" name="new_password" required minlength="12" maxlength="128" autocomplete="new-password">
+<p><button type="submit">Change password</button></p></form></div>
+<div class="panel"><h2>Delete account</h2>
 <p>Permanently deletes your account, targets and scan results.</p>
 <form method="post" action="/account/delete"><input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-<label for="password">Confirm password</label><input id="password" type="password" name="password" required autocomplete="current-password">
+<label for="password">Confirm with your password</label><input id="password" type="password" name="password" required autocomplete="current-password">
 <p><button class="danger" type="submit">Delete my account</button></p></form></div>
 {% endblock %}
