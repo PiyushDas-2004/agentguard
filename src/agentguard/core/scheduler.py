@@ -70,6 +70,12 @@ class TrialScheduler:
                 outcome.peak_in_flight = max(outcome.peak_in_flight, self._in_flight)
                 try:
                     result = await worker(item)
+                except KeyboardInterrupt as exc:
+                    # Raised inside a task, KeyboardInterrupt would escape the event loop and skip
+                    # cleanup on Python 3.11; turn it into a clean, recorded abort instead.
+                    outcome.aborted, outcome.error = "interrupted", exc
+                    stop.set()
+                    raise asyncio.CancelledError from exc
                 finally:
                     self._in_flight -= 1
                 outcome.results.append(result)
@@ -83,6 +89,8 @@ class TrialScheduler:
                 try:
                     await future
                 except asyncio.CancelledError:
+                    if outcome.aborted == "interrupted":
+                        break
                     if stop.is_set():
                         continue
                     raise

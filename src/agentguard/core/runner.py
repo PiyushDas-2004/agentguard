@@ -396,6 +396,9 @@ class Runner:
         result = self._finish(cases, target, started_at, t0, abort_reason, quality)
         db.finish_run(result)
         self.result = result
+        if isinstance(outcome.error, KeyboardInterrupt):
+            # Partial results are stored; now honour the user's interrupt.
+            raise KeyboardInterrupt from outcome.error
         return result
 
     def _finish(

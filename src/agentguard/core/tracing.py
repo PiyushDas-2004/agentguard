@@ -80,7 +80,10 @@ class Tracer:
             raise
         finally:
             span.end_ns = time.perf_counter_ns()
-            _current_span.reset(token)
+            try:
+                _current_span.reset(token)
+            except ValueError:  # finalized from another context (e.g. a cancelled task on 3.11)
+                _current_span.set(parent)
             self._record(span)
 
     def _record(self, span: Span) -> None:
