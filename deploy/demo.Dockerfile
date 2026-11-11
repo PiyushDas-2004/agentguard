@@ -28,7 +28,7 @@ COPY --chown=agentguard:agentguard examples ./examples
 COPY --chown=agentguard:agentguard deploy/seed_demo.sh ./seed_demo.sh
 ENV PATH="/opt/venv/bin:$PATH" PYTHONUNBUFFERED=1 AGENTGUARD_HOST=0.0.0.0 PORT=8000 \
     AGENTGUARD_BANNER="Live demo: real offline AgentGuard runs (2 trials per case) of the bundled demo agents. The vulnerable and partially hardened agents fail by design; the hardened agent wraps the same naive model in defense code. Source: github.com/PiyushDas-2004/agentguard"
-USER agentguard
+USER 10001:10001
 RUN ./seed_demo.sh
 EXPOSE 8000
 HEALTHCHECK --interval=15s --timeout=3s --retries=5 CMD ["python", "-c", "import os,urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:%s/healthz' % os.environ.get('PORT','8000'), timeout=2).status == 200 else 1)"]

@@ -23,7 +23,7 @@ COPY --chown=agentguard:agentguard datasets ./datasets
 COPY --chown=agentguard:agentguard examples ./examples
 RUN mkdir -p /work/.agentguard /work/reports && chown agentguard:agentguard /work/.agentguard /work/reports
 ENV PATH="/opt/venv/bin:$PATH" PYTHONUNBUFFERED=1
-USER agentguard
+USER 10001:10001
 EXPOSE 8000
 HEALTHCHECK --interval=15s --timeout=3s --retries=5 CMD ["python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/healthz', timeout=2).status == 200 else 1)"]
 ENTRYPOINT ["agentguard"]

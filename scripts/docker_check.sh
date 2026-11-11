@@ -38,10 +38,13 @@ fi
 
 echo "docker_check: Docker daemon available ($(docker version --format '{{.Server.Version}}' 2>/dev/null))"
 
-# 1. Lint (hadolint via its pinned image) — informative and fatal on errors.
-if docker image inspect hadolint/hadolint:v2.12.0 >/dev/null 2>&1 || docker pull -q hadolint/hadolint:v2.12.0 >/dev/null 2>&1; then
-  echo "docker_check: hadolint (hadolint/hadolint:v2.12.0)"
-  docker run --rm -i hadolint/hadolint:v2.12.0 < Dockerfile
+# 1. Lint (hadolint via its pinned image, same rules and threshold as CI) — fatal on any finding.
+HADOLINT_IMAGE=ghcr.io/hadolint/hadolint:v2.15.1
+if docker image inspect "$HADOLINT_IMAGE" >/dev/null 2>&1 || docker pull -q "$HADOLINT_IMAGE" >/dev/null 2>&1; then
+  for dockerfile in Dockerfile deploy/demo.Dockerfile; do
+    echo "docker_check: hadolint ($HADOLINT_IMAGE, threshold=info) on $dockerfile"
+    docker run --rm -i -e HADOLINT_FAILURE_THRESHOLD=info "$HADOLINT_IMAGE" < "$dockerfile"
+  done
   echo "docker_check: hadolint passed"
 else
   echo "docker_check: hadolint image unavailable — lint skipped (build still runs)"
