@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1.7
 # Hosted multi-user AgentGuard web app (see docs/DEPLOYMENT.md and docs/HOSTED_SECURITY.md).
-FROM python:3.12-slim AS builder
+FROM python:3.15-slim AS builder
 ENV UV_COMPILE_BYTECODE=1 UV_LINK_MODE=copy UV_PYTHON_DOWNLOADS=never UV_PROJECT_ENVIRONMENT=/opt/venv
 COPY --from=ghcr.io/astral-sh/uv:0.11.32 /uv /usr/local/bin/uv
 WORKDIR /app
@@ -11,7 +11,7 @@ RUN --mount=type=secret,id=ca_bundle,required=false \
     if [ -s /run/secrets/ca_bundle ]; then export SSL_CERT_FILE=/run/secrets/ca_bundle; fi; \
     uv sync --locked --no-dev --extra web --no-editable
 
-FROM python:3.12-slim AS runtime
+FROM python:3.15-slim AS runtime
 LABEL org.opencontainers.image.title="AgentGuard web" \
       org.opencontainers.image.description="Hosted AgentGuard: red-team your AI agent from the browser" \
       org.opencontainers.image.licenses="Apache-2.0"
