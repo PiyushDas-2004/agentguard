@@ -34,6 +34,7 @@ EXCLUDE_FILES = [
     r"^coverage\.xml$",
     r"^\.secrets\.baseline$",
     r"^src/agentguard/dashboard/static/htmx\.min\.js$",  # vendored, minified third-party library
+    r"^src/agentguard/web/static/htmx\.min\.js$",  # same vendored library, served by the web app
 ]
 
 # path prefix -> why findings there are not real secrets (printed with every run)

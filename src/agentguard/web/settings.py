@@ -71,7 +71,7 @@ class WebSettings(BaseModel):
 
 _ENV = {
     "env": "AGENTGUARD_ENV",
-    "secret_key": "AGENTGUARD_SECRET_KEY",
+    "secret_key": "AGENTGUARD_SECRET_KEY",  # pragma: allowlist secret - env var name, not a value
     "database_url": "DATABASE_URL",
     "base_url": "AGENTGUARD_BASE_URL",
     "signup_code": "AGENTGUARD_SIGNUP_CODE",
