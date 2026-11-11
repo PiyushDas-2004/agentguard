@@ -1,0 +1,19 @@
+{% extends "base.html.j2" %}
+{% block body %}
+<h1>Red-team your AI agent</h1>
+<p class="muted">AgentGuard sends hundreds of canary-based attacks — prompt injection, jailbreaks, system-prompt extraction,
+data exfiltration, insecure output, runaway cost — to <strong>your</strong> agent's API and reports what got through,
+with 95% confidence intervals.</p>
+<div class="panel">
+<h2>How it works</h2>
+<ol>
+<li><strong>Register your endpoint</strong> (HTTPS JSON API or OpenAI-compatible) and prove you own it with a
+<code>.well-known</code> file or DNS TXT record — AgentGuard never scans systems you don't control.</li>
+<li><strong>Run a scan.</strong> Verdicts come from deterministic detectors (canary leaks, unsafe output, policy violations). Optionally add
+your <strong>own Gemini API key</strong> for an LLM judge on ambiguous jailbreak cases — it is used in memory for that scan only and never stored.</li>
+<li><strong>Read the report</strong> and download SARIF, JUnit, JSON or Markdown.</li>
+</ol>
+<p><a class="btn" href="/signup">Create account</a> <a class="btn secondary" href="https://github.com/PiyushDas-2004/agentguard">Source code</a></p>
+</div>
+<p class="muted">AgentGuard {{ version }} · attacks use canary tokens and mock objectives only · <a href="https://github.com/PiyushDas-2004/agentguard/blob/main/RESPONSIBLE_USE.md">Responsible use</a></p>
+{% endblock %}

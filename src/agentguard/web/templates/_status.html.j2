@@ -1,0 +1,6 @@
+<div id="status" {% if scan.status in ['queued', 'running'] %}hx-get="/scans/{{ scan.id }}/status" hx-trigger="every 3s" hx-swap="outerHTML"{% endif %}>
+<p>Status: <span class="badge {{ 'ok' if scan.status == 'completed' else ('bad' if scan.status in ['failed', 'cancelled'] else 'warn') }}">{{ scan.status }}</span>
+{% if scan.progress_total %} · {{ scan.progress_done }} / {{ scan.progress_total }} trials{% endif %}</p>
+{% if scan.status in ['queued', 'running'] %}<progress max="{{ scan.progress_total or 1 }}" value="{{ scan.progress_done }}"></progress>{% endif %}
+{% if scan.error %}<p class="{{ 'error' if scan.status != 'completed' else 'muted' }}">{{ scan.error }}</p>{% endif %}
+</div>

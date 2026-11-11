@@ -1,0 +1,2 @@
+{% extends "base.html.j2" %}{% block title %}{{ title }} · AgentGuard{% endblock %}
+{% block body %}<h1>{{ title }}</h1>{% if detail %}<p class="error" role="alert">{{ detail }}</p>{% endif %}<p><a href="/">Back to start</a></p>{% endblock %}

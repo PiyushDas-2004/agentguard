@@ -23,3 +23,6 @@ fix or mitigation within 30 days for high-severity issues.
 * The dashboard binds to `127.0.0.1` by default; expose it only behind authentication.
 * The container runs as a non-root user (`uid 10001`).
 * Live provider keys are read from environment variables only and never written to reports.
+* The hosted web app (`agentguard serve`) has its own threat model and controls: see
+  [docs/HOSTED_SECURITY.md](docs/HOSTED_SECURITY.md). Reports of SSRF, cross-tenant access or
+  secret leakage in the hosted app are treated as high severity.

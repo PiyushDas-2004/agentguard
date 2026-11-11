@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, SecretStr, field_validator, model_validator
 
 from agentguard.core.types import AttackCategory
 
@@ -66,12 +66,13 @@ class LLMConfig(_Strict):
         injection_compliance: MockLLM probability of obeying injected instructions.
     """
 
-    provider: Literal["mock", "anthropic", "openai", "ollama", "litellm"] = "mock"
+    provider: Literal["mock", "anthropic", "openai", "ollama", "litellm", "gemini"] = "mock"
     profile: str = "vulnerable"
     model: str | None = None
     temperature: float = Field(default=0.0, ge=0.0, le=2.0)
     api_base: str | None = None
     injection_compliance: float = Field(default=0.9, ge=0.0, le=1.0)
+    api_key: SecretStr | None = Field(default=None, exclude=True, repr=False)
 
 
 class ResponseMapping(_Strict):
@@ -175,13 +176,14 @@ class SuitesConfig(_Strict):
 class JudgeConfig(_Strict):
     """Judge settings."""
 
-    provider: Literal["mock", "anthropic", "openai", "ollama", "litellm"] = "mock"
+    provider: Literal["mock", "anthropic", "openai", "ollama", "litellm", "gemini"] = "mock"
     model: str | None = None
     ensemble: bool = False
-    second_provider: Literal["mock", "anthropic", "openai", "ollama", "litellm"] | None = None
+    second_provider: Literal["mock", "anthropic", "openai", "ollama", "litellm", "gemini"] | None = None
     second_model: str | None = None
     max_repair_retries: int = Field(default=2, ge=0, le=5)
     plugin: str | None = Field(default=None, description="name of an agentguard.judges entry-point judge")
+    api_key: SecretStr | None = Field(default=None, exclude=True, repr=False)
     plugin_options: dict[str, Any] = Field(default_factory=dict)
 
 

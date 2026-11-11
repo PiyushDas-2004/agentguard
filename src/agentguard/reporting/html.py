@@ -116,8 +116,8 @@ def _case_view(case: CaseResult) -> dict[str, Any]:
     }
 
 
-def render_html(result: RunResult) -> str:
-    """Render the full HTML report for ``result``."""
+def render_html(result: RunResult, *, nonce: str | None = None) -> str:
+    """Render the full HTML report for ``result`` (``nonce`` tags the inline script for CSP)."""
     env = Environment(
         loader=PackageLoader("agentguard.reporting", "templates"),
         autoescape=select_autoescape(["html", "j2", "html.j2"]),
@@ -162,5 +162,6 @@ def render_html(result: RunResult) -> str:
         ],
         owasp=[{"row": row, "url": owasp_url(row.owasp_id)} for row in result.owasp_coverage],
         robustness=robustness,
+        nonce=nonce,
         gauge_angle=round(result.risk_score / 100 * 180, 2),
     )

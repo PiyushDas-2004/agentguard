@@ -193,7 +193,7 @@ code{background:var(--code);padding:1px 4px;border-radius:4px}
   </table></div>
 </section>
 </main>
-<script>
+<script{% if nonce %} nonce="{{ nonce }}"{% endif %}>
 (function(){
   var q=document.getElementById('q'),fs=document.getElementById('fs'),fc=document.getElementById('fc');
   function apply(){var t=(q.value||'').toLowerCase(),s=fs.value,c=fc.value;

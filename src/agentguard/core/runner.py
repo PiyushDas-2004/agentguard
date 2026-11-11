@@ -89,7 +89,7 @@ def build_judge(config: JudgeConfig, *, offline: bool, budget: BudgetTracker | N
     def single(provider: str, model: str | None) -> Judge:
         if offline or provider == "mock":
             return MockJudge()
-        llm = build_llm(LLMConfig(provider=provider, model=model))
+        llm = build_llm(LLMConfig(provider=provider, model=model, api_key=config.api_key))
         return LLMJudge(MeteredLLM(llm, budget, component="judge"), max_repair_retries=config.max_repair_retries)
 
     first = single(config.provider, config.model)

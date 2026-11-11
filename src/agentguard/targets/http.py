@@ -64,10 +64,15 @@ class HTTPTarget(BaseTarget):
         mapping: ResponseMapping | None = None,
         timeout: float = 30.0,
         transport: httpx.AsyncBaseTransport | None = None,
+        interpolate_headers: bool = True,
     ) -> None:
-        self.url = interpolate_env(url)
+        # ${VAR} expansion is a CLI convenience. Hosted/multi-tenant callers MUST pass
+        # interpolate_headers=False, otherwise a user-supplied URL or header could exfiltrate
+        # server environment variables (e.g. secret keys) to the target.
+        expand = interpolate_env if interpolate_headers else (lambda value: value)
+        self.url = expand(url)
         self.method = method
-        self.headers = {k: interpolate_env(v) for k, v in (headers or {}).items()}
+        self.headers = {k: expand(v) for k, v in (headers or {}).items()}
         env = SandboxedEnvironment(undefined=StrictUndefined, autoescape=False)  # renders a JSON body, not HTML
         try:
             self.template = env.from_string(request_template or DEFAULT_TEMPLATE)

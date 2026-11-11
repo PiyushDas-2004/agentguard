@@ -48,11 +48,13 @@ Want the passing case? `uv run agentguard run -c examples/demo_hardened.yaml --o
 
 ## Hosting
 
+* **Hosted web app (for other people):** [![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/PiyushDas-2004/agentguard)
+  — accounts, endpoint-ownership verification, scans from the browser, reports and SARIF/JUnit downloads.
+  Works without any LLM key (deterministic detectors); users can add a Gemini judge with **their own** key,
+  which is used in memory for one scan and never stored. Security design: [docs/HOSTED_SECURITY.md](docs/HOSTED_SECURITY.md).
 * **Website:** https://piyushdas-2004.github.io/agentguard/ — landing page and sample reports (GitHub Pages).
-* **Live dashboard:** [![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/PiyushDas-2004/agentguard)
-  — or locally: `docker run -p 8000:8000 ghcr.io/piyushdas-2004/agentguard-demo:latest`.
-* **Images** `ghcr.io/piyushdas-2004/agentguard` (CLI) and `ghcr.io/piyushdas-2004/agentguard-demo` (dashboard with demo
-  runs) are published on every push to `main`. See [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).
+* **Images** `ghcr.io/piyushdas-2004/agentguard` (CLI), `…/agentguard-web` (web app) and `…/agentguard-demo`
+  (read-only dashboard with demo runs) are published on every push to `main`. See [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).
 
 ## Features
 

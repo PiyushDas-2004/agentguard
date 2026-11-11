@@ -92,8 +92,25 @@ jobs:
       - uses: hadolint/hadolint-action@v3.5.0
         with:
           dockerfile: Dockerfile
+      - uses: hadolint/hadolint-action@v3.5.0
+        with:
+          dockerfile: deploy/web.Dockerfile
       - name: Build image
         run: docker build -t agentguard:ci .
+      - name: Web app image smoke test (production settings)
+        run: |
+          docker build -f deploy/web.Dockerfile -t agentguard-web:ci .
+          docker run -d --name web -p 8001:8000 \
+            -e AGENTGUARD_SECRET_KEY="$(openssl rand -hex 32)" -e AGENTGUARD_SIGNUP_CODE="$(openssl rand -hex 12)" \
+            -e AGENTGUARD_BASE_URL=https://agentguard.example.com -e DATABASE_URL=sqlite:////tmp/web.db \
+            agentguard-web:ci
+          for _ in $(seq 1 30); do curl -fsS http://localhost:8001/healthz && break; sleep 2; done
+          curl -fsS http://localhost:8001/healthz
+          curl -fsSI http://localhost:8001/login | grep -i "content-security-policy"
+          curl -fsSI http://localhost:8001/login | grep -i "strict-transport-security"
+          docker rm -f web
+          # insecure configuration must refuse to start
+          if docker run --rm -e AGENTGUARD_BASE_URL=http://insecure.example.com agentguard-web:ci; then exit 1; fi
       - name: Compose smoke test
         run: |
           docker compose up -d dashboard

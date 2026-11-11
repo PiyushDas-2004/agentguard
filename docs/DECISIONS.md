@@ -110,3 +110,19 @@ project evolves.
 - **Decision:** EXCESSIVE_AGENCY cases use agency detectors only (`tool_policy`, optionally
   `exfil`/`resource`); disclosure detectors (`canary`, `system_prompt`, `pii`) belong to
   disclosure categories. Enforced by `lint-datasets`. Ground truth and detectors were not changed.
+
+## D-017 Hosted web app: verified targets, BYOK Gemini, secrets in memory only
+- **Decision:** the hosted service (`agentguard serve`) scans only endpoints whose owner proved
+  control (well-known file or DNS TXT); all outbound traffic goes through an SSRF-safe transport
+  that validates resolved addresses at connect time; users bring their own Gemini key, which is
+  held in memory for one scan and never persisted; only `http` and `openai_compat` targets are
+  offered (the `python`/`langchain`/`mcp` targets would execute code on the server).
+- **Reason:** a public service that sends attack traffic to user-supplied URLs is otherwise an
+  attack proxy and an SSRF primitive; storing third-party API keys would make the database a
+  high-value target. Deterministic detectors keep the service useful without any key.
+- **Trade-off:** single instance (in-memory queue/limiter); a restart fails running scans.
+
+## D-018 `${VAR}` interpolation is a CLI-only feature
+- **Decision:** `HTTPTarget(interpolate_headers=False)` for hosted targets.
+- **Reason:** found during the hosted-app design: a user-controlled URL such as
+  `https://x/?k=${AGENTGUARD_SECRET_KEY}` would otherwise send server secrets to the target.

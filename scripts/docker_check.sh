@@ -22,7 +22,7 @@ fi
 hadolint_check() {
   if command -v hadolint >/dev/null 2>&1; then
     echo "docker_check: running hadolint $(hadolint --version 2>/dev/null | head -1)"
-    hadolint Dockerfile
+    hadolint Dockerfile deploy/demo.Dockerfile deploy/web.Dockerfile
     echo "docker_check: hadolint passed (image was NOT built: no Docker daemon)"
     return 0
   fi
@@ -41,7 +41,7 @@ echo "docker_check: Docker daemon available ($(docker version --format '{{.Serve
 # 1. Lint (hadolint via its pinned image, same rules and threshold as CI) — fatal on any finding.
 HADOLINT_IMAGE=ghcr.io/hadolint/hadolint:v2.15.1
 if docker image inspect "$HADOLINT_IMAGE" >/dev/null 2>&1 || docker pull -q "$HADOLINT_IMAGE" >/dev/null 2>&1; then
-  for dockerfile in Dockerfile deploy/demo.Dockerfile; do
+  for dockerfile in Dockerfile deploy/demo.Dockerfile deploy/web.Dockerfile; do
     echo "docker_check: hadolint ($HADOLINT_IMAGE, threshold=info) on $dockerfile"
     docker run --rm -i -e HADOLINT_FAILURE_THRESHOLD=info "$HADOLINT_IMAGE" < "$dockerfile"
   done

@@ -1,0 +1,1 @@
+"""Web templates (package data)."""

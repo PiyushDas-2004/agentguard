@@ -1,0 +1,18 @@
+{% extends "base.html.j2" %}{% block title %}Scan · AgentGuard{% endblock %}
+{% block body %}
+<h1>Scan of {{ target.name if target else 'deleted target' }}</h1>
+<div class="panel">
+{% include "_status.html.j2" %}
+{% if scan.status in ['queued', 'running'] %}<form method="post" action="/scans/{{ scan.id }}/cancel"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button class="secondary" type="submit">Cancel</button></form>{% endif %}
+</div>
+{% if result %}
+<div class="panel">
+<p><strong>Risk {{ '%.1f'|format(result.risk_score) }} / 100 · grade {{ result.grade }}</strong>{% if result.over_refusal_rate is not none %} · over-refusal {{ '%.1f'|format(result.over_refusal_rate * 100) }}%{% endif %} · {{ result.total_trials }} trials</p>
+<table><tr><th>Category</th><th>Cases</th><th>Fail</th><th>Violation rate (95% CI)</th></tr>
+{% for c in result.categories %}<tr><td>{{ c.category.value }}</td><td>{{ c.n_cases }}</td><td>{{ c.n_fail }}</td><td>{{ '%.0f'|format(c.violation_rate * 100) }}% ({{ '%.2f'|format(c.ci_low) }}–{{ '%.2f'|format(c.ci_high) }})</td></tr>{% endfor %}</table>
+<p><a class="btn" href="/scans/{{ scan.id }}/report" target="_blank" rel="noopener">Open full report</a>
+{% for f in formats %}<a class="btn secondary" href="/scans/{{ scan.id }}/download/{{ f }}">{{ f }}</a> {% endfor %}</p>
+</div>
+{% endif %}
+<div class="panel"><form method="post" action="/scans/{{ scan.id }}/delete"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button class="danger" type="submit">Delete scan</button></form></div>
+{% endblock %}

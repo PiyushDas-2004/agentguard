@@ -504,6 +504,43 @@ def dashboard(
     uvicorn.run(create_app(db_path), host=host, port=port, log_level="info")
 
 
+@app.command()
+def serve(
+    port: Annotated[int, typer.Option(envvar="PORT", help="Port to listen on (env: PORT).")] = 8000,
+    host: Annotated[
+        str, typer.Option(envvar="AGENTGUARD_HOST", help="Interface to bind (env: AGENTGUARD_HOST).")
+    ] = "127.0.0.1",
+) -> None:
+    """Run the hosted multi-user web app (accounts, endpoint verification, BYOK Gemini judge).
+
+    Configured with AGENTGUARD_* environment variables; see docs/DEPLOYMENT.md.
+    Example: `AGENTGUARD_SECRET_KEY=... agentguard serve --port 8000`
+    """
+    try:
+        import uvicorn
+
+        from agentguard.web.app import create_web_app
+        from agentguard.web.settings import load_settings
+    except ImportError as exc:
+        raise _fail("the web app needs: pip install 'agentguard[web]'", ExitCode.CONFIG_ERROR) from exc
+    try:
+        settings = load_settings()
+    except ConfigError as exc:
+        raise _fail(str(exc), ExitCode.CONFIG_ERROR) from exc
+    uvicorn.run(
+        create_web_app(settings),
+        host=host,
+        port=port,
+        log_level="info",
+        proxy_headers=False,  # client IPs come from X-Forwarded-For via AGENTGUARD_TRUSTED_PROXY_HOPS
+        server_header=False,
+        date_header=False,
+        timeout_keep_alive=5,
+        limit_concurrency=200,
+        h11_max_incomplete_event_size=16 * 1024,
+    )
+
+
 def main() -> None:
     """Console-script entry point."""
     app()

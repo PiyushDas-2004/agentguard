@@ -1,0 +1,35 @@
+{% extends "base.html.j2" %}{% block title %}Targets · AgentGuard{% endblock %}
+{% block body %}
+<h1>Targets</h1>
+<div class="panel">
+{% if targets %}<table><tr><th>Name</th><th>Type</th><th>URL</th><th>Ownership</th></tr>
+{% for t in targets %}<tr><td><a href="/targets/{{ t.id }}">{{ t.name }}</a></td><td>{{ 'HTTP JSON' if t.kind == 'http' else 'OpenAI-compatible' }}</td><td><code>{{ t.url }}</code></td>
+<td>{% if t.verified_at %}<span class="badge ok">verified</span>{% else %}<span class="badge warn">unverified</span>{% endif %}</td></tr>{% endfor %}</table>
+{% else %}<p class="muted">No targets yet. Add your agent's endpoint below.</p>{% endif %}
+</div>
+<h2>Add a target</h2>
+<div class="panel">
+{% if error %}<p class="error" role="alert">{{ error }}</p>{% endif %}
+<form method="post" action="/targets">
+<input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+<label for="name">Name</label><input id="name" type="text" name="name" required maxlength="80" value="{{ form.name or '' }}">
+<label for="kind">Type</label>
+<select id="kind" name="kind">
+<option value="http" {% if form.kind != 'openai_compat' %}selected{% endif %}>HTTP JSON API (your agent's chat endpoint)</option>
+<option value="openai_compat" {% if form.kind == 'openai_compat' %}selected{% endif %}>OpenAI-compatible /v1/chat/completions (AgentGuard runs the tools)</option>
+</select>
+<label for="url">Endpoint URL <span class="hint">https only; for OpenAI-compatible, the base URL ending in /v1</span></label>
+<input id="url" type="url" name="url" required maxlength="2048" placeholder="https://agent.example.com/chat" value="{{ form.url or '' }}">
+<label for="preset">Request body <span class="hint">(HTTP JSON only)</span></label>
+<select id="preset" name="preset">{% for key, tpl in presets.items() %}<option value="{{ key }}" {% if form.preset == key %}selected{% endif %}>{{ tpl }}</option>{% endfor %}</select>
+<label for="request_template">Custom request template <span class="hint">optional; only {{ '{{ message | tojson }}' }}-style substitutions of message, messages, system_prompt, session</span></label>
+<textarea id="request_template" name="request_template" maxlength="4000">{{ form.request_template or '' }}</textarea>
+<div class="grid">
+<div><label for="text_path">Reply JSONPath</label><input id="text_path" type="text" name="text_path" maxlength="200" value="{{ form.text_path or '$.reply' }}"></div>
+<div><label for="tool_calls_path">Tool-calls JSONPath <span class="hint">optional</span></label><input id="tool_calls_path" type="text" name="tool_calls_path" maxlength="200" value="{{ form.tool_calls_path or '' }}" placeholder="$.tool_calls"></div>
+<div><label for="model">Model name <span class="hint">OpenAI-compatible only</span></label><input id="model" type="text" name="model" maxlength="120" value="{{ form.model or '' }}"></div>
+</div>
+<p><button type="submit">Add target</button></p>
+</form>
+</div>
+{% endblock %}

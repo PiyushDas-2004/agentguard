@@ -1,0 +1,40 @@
+{% extends "base.html.j2" %}{% block title %}New scan · AgentGuard{% endblock %}
+{% block body %}
+<h1>New scan</h1>
+{% set chosen = (targets | selectattr('id', 'equalto', selected) | list | first) if selected else none %}
+{% if not targets %}<div class="panel"><p class="muted">You need a verified target first. <a href="/targets">Manage targets</a></p></div>
+{% elif not chosen %}
+<div class="panel"><p>Choose a verified target:</p><ul>{% for t in targets %}<li><a href="/scans/new?target={{ t.id }}">{{ t.name }}</a> <code>{{ t.url }}</code></li>{% endfor %}</ul></div>
+{% else %}
+<form method="post" action="/scans">
+<input type="hidden" name="csrf_token" value="{{ csrf_token }}"><input type="hidden" name="target_id" value="{{ chosen.id }}">
+<div class="panel">
+<p>Target: <strong>{{ chosen.name }}</strong> <code>{{ chosen.url }}</code></p>
+<label>Attack categories</label>
+{% for c in categories[chosen.kind] %}<label class="check"><input type="checkbox" name="categories" value="{{ c }}" checked> {{ c }}</label>{% endfor %}
+{% if chosen.kind == 'http' %}<p class="hint">Black-box HTTP agents are tested on conversational attacks. Indirect injection, memory and RAG poisoning need tools AgentGuard controls — use an OpenAI-compatible target for those.</p>{% endif %}
+<div class="grid">
+<div><label for="trials">Trials per case</label><input id="trials" type="number" name="trials" min="1" max="{{ max_trials }}" value="1"></div>
+<div><label class="check"><input type="checkbox" name="mutations" value="true"> Also send obfuscated variants (base64, homoglyphs, …)</label></div>
+</div>
+</div>
+<div class="panel">
+<h2>Agent credentials <span class="hint">optional — used for this scan only, never stored</span></h2>
+<div class="grid">
+<div><label for="auth_header_name">Header name</label><input id="auth_header_name" type="text" name="auth_header_name" value="Authorization" maxlength="64"></div>
+<div><label for="auth_header_value">Header value</label><input id="auth_header_value" type="password" name="auth_header_value" maxlength="2000" autocomplete="off" placeholder="Bearer …"></div>
+</div>
+</div>
+<div class="panel">
+<h2>Judge</h2>
+<label class="check"><input type="radio" name="judge" value="deterministic" checked> Deterministic detectors only (no API key needed)</label>
+<label class="check"><input type="radio" name="judge" value="gemini"> Add a Gemini LLM judge for ambiguous jailbreak cases (your own key)</label>
+<label for="gemini_api_key">Gemini API key <span class="hint">sent to Google only, held in memory for this scan, never stored or logged</span></label>
+<input id="gemini_api_key" type="password" name="gemini_api_key" maxlength="200" autocomplete="off">
+<p><button class="secondary" type="button" hx-post="/gemini/models" hx-include="#gemini_api_key" hx-target="#models">Check key and list models</button></p>
+<div id="models"><label for="judge_model">Model</label><input id="judge_model" type="text" name="judge_model" maxlength="120" placeholder="gemini-2.5-flash"></div>
+</div>
+<p><button type="submit">Start scan</button></p>
+</form>
+{% endif %}
+{% endblock %}

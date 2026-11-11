@@ -1,0 +1,29 @@
+{% extends "base.html.j2" %}{% block title %}{{ target.name }} · AgentGuard{% endblock %}
+{% block body %}
+<h1>{{ target.name }}</h1>
+<div class="panel">
+<p><code>{{ target.url }}</code> · {{ 'HTTP JSON' if target.kind == 'http' else 'OpenAI-compatible' }}
+{% if target.verified_at %}<span class="badge ok">verified</span>{% else %}<span class="badge warn">unverified</span>{% endif %}</p>
+{% if message %}<p class="{{ 'success' if ok else 'error' }}" role="status">{{ message }}</p>{% endif %}
+{% if target.verified_at %}
+<p><a class="btn" href="/scans/new?target={{ target.id }}">Run a scan</a></p>
+{% else %}
+<h2>Prove you own this endpoint</h2>
+<p>AgentGuard only scans endpoints whose owner has verified them. Use <strong>one</strong> of these methods, then click Verify.</p>
+<p><strong>Option A — HTTP file.</strong> Serve this exact text at <code>{{ well_known }}</code>:</p>
+<pre>{{ target.verification_token }}</pre>
+<p><strong>Option B — DNS.</strong> Add a TXT record at <code>{{ dns_name }}</code> with the value above.</p>
+<form class="inline" method="post" action="/targets/{{ target.id }}/verify"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><input type="hidden" name="method" value="http"><button type="submit">Verify via HTTP file</button></form>
+<form class="inline" method="post" action="/targets/{{ target.id }}/verify"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><input type="hidden" name="method" value="dns"><button class="secondary" type="submit">Verify via DNS</button></form>
+{% endif %}
+</div>
+<div class="panel">
+<h2>Leak-detection canary</h2>
+<p>Put this token somewhere your agent must never reveal (for example in its system prompt as an "internal reference code").
+AgentGuard reports it if the agent leaks it in any of 13 encodings.</p>
+<pre>{{ target.canary }}</pre>
+</div>
+<div class="panel">
+<form method="post" action="/targets/{{ target.id }}/delete"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button class="danger" type="submit">Delete target and its scans</button></form>
+</div>
+{% endblock %}

@@ -1,0 +1,4 @@
+{% if error %}<p class="error" role="alert">{{ error }}</p><label for="judge_model">Model</label><input id="judge_model" type="text" name="judge_model" maxlength="120">
+{% else %}{% set preferred = 'gemini-2.5-flash' if 'gemini-2.5-flash' in models else (models | first) %}
+<p class="success" role="status">Key accepted. {{ models | length }} models available.</p>
+<label for="judge_model">Model</label><select id="judge_model" name="judge_model">{% for m in models %}<option value="{{ m }}" {% if m == preferred %}selected{% endif %}>{{ m }}</option>{% endfor %}</select>{% endif %}

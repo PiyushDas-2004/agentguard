@@ -1,0 +1,12 @@
+{% extends "base.html.j2" %}{% block title %}Scans · AgentGuard{% endblock %}
+{% block body %}
+<h1>Scans</h1>
+<p><a class="btn" href="/scans/new">New scan</a></p>
+<div class="panel">
+{% if scans %}<table><tr><th>Started</th><th>Target</th><th>Status</th><th>Risk</th><th>Grade</th></tr>
+{% for s in scans %}<tr><td><a href="/scans/{{ s.id }}">{{ s.created_at.strftime('%Y-%m-%d %H:%M') }}</a></td><td>{{ names.get(s.target_id, '—') }}</td>
+<td><span class="badge {{ 'ok' if s.status == 'completed' else ('bad' if s.status == 'failed' else 'warn') }}">{{ s.status }}</span></td>
+<td>{{ '%.1f'|format(s.risk_score) if s.risk_score is not none else '—' }}</td><td>{{ s.grade or '—' }}</td></tr>{% endfor %}</table>
+{% else %}<p class="muted">No scans yet. <a href="/targets">Add and verify a target</a> first.</p>{% endif %}
+</div>
+{% endblock %}

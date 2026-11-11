@@ -4,6 +4,25 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+- Hosted multi-user web app (`agentguard serve`, `pip install 'agentguard[web]'`): accounts,
+  endpoint ownership verification (well-known file or DNS TXT), browser-started scans with live
+  progress, sandboxed HTML reports and JSON/SARIF/JUnit/Markdown downloads, account deletion,
+  data retention. One-click Render blueprint with managed Postgres (`render.yaml`) and the
+  `ghcr.io/<owner>/agentguard-web` image.
+- Gemini provider (`provider: gemini`) for the LLM judge and attacker; in the web app users bring
+  their own key, which is held in memory for one scan only.
+- `agentguard.netsafe`: SSRF-safe HTTP transport (connect-time address validation, origin
+  pinning, no redirects or env proxies, response size cap).
+- CodeQL and Dependabot configuration; CI smoke-tests the web image in production mode.
+
+### Security
+- `HTTPTarget` can disable `${VAR}` expansion; the hosted app always does, so user-controlled
+  URLs/headers cannot read server environment variables.
+- API keys in `LLMConfig`/`JudgeConfig` are `SecretStr` fields excluded from serialization.
+
 ## [1.0.0] - 2026-11-11
 
 ### Fixed (pre-release verification)

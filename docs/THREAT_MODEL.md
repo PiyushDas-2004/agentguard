@@ -87,3 +87,11 @@ the OVER_REFUSAL benign set with the `refusal` detector and reported separately.
   of scope (LLM03/LLM04 are covered only through package hallucination and runtime poisoning).
 * Offline results characterise the demo agents' defenses against a naive instruction follower;
   live mode is required to characterise a real model's susceptibility.
+
+## Hosted service
+
+When AgentGuard runs as the multi-user web app (`agentguard serve`) the trust boundaries change:
+users are untrusted, the targets they register are untrusted, and the server holds other users'
+data. Those threats (SSRF, scanning third-party systems, cross-tenant access, secret leakage,
+template injection, XSS from agent output, CSRF, credential stuffing) and their controls are
+covered in [HOSTED_SECURITY.md](HOSTED_SECURITY.md).
