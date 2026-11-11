@@ -44,6 +44,7 @@ REQUEST_PRESETS: dict[str, str] = {
     "messages": '{"messages": {{ messages | tojson }}}',
     "message_and_history": '{"message": {{ message | tojson }}, "history": {{ messages[:-1] | tojson }}}',
 }
+TARGET_MAX_RESPONSE_BYTES = 256 * 1024
 TRANSFORMS = ["base64", "rot13", "leetspeak", "homoglyph", "zero_width", "wrapper_roleplay"]
 
 # Black-box HTTP agents cannot be given AgentGuard's mock tools/memory/corpus, so only categories
@@ -114,6 +115,7 @@ def target_policy(target: Target, settings: WebSettings) -> NetPolicy:
         allow_http=settings.allow_http_targets,
         allow_private=settings.allow_private_targets,
         allowed_origins=frozenset({origin_of(target.url)}),
+        max_response_bytes=TARGET_MAX_RESPONSE_BYTES,
     )
 
 
@@ -163,7 +165,7 @@ def run_config(target: Target, request: ScanRequest, settings: WebSettings, work
                 "timeout_seconds": settings.request_timeout_seconds,
                 "rate_limit_per_second": settings.target_requests_per_second,
                 "max_retries": 2,
-                "max_output_chars": 60_000,
+                "max_output_chars": 8_000,
             },
             "target": {
                 "type": target.kind,
@@ -181,7 +183,7 @@ def run_config(target: Target, request: ScanRequest, settings: WebSettings, work
                 "provider": "gemini" if request.judge == "gemini" else "mock",
                 "model": request.judge_model or None,
             },
-            "reports": {"formats": [], "embed_trials_per_case": 2},
+            "reports": {"formats": [], "embed_trials_per_case": 1},
             "storage": {"db_path": str(workspace / "scan.db"), "transcripts_dir": str(workspace / "tr")},
         }
     )

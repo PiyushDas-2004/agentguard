@@ -19,6 +19,13 @@ All notable changes to this project are documented here. The format follows
 - CodeQL and Dependabot configuration; CI smoke-tests the web image in production mode.
 
 ### Security
+- Hardening from an independent review of the web app: 64 KiB request-body limit (declared and
+  chunked), compressed target responses refused, 256 KiB target response cap, per-turn tool-call
+  and reply limits, 5 MB stored-result cap, total scan time limit, argon2 on a bounded pool,
+  per-client login throttling instead of account lockout, quota counted from the audit log,
+  hourly retention purge, JSON-escaped secret redaction, `fec0::/10` treated as non-public.
+- Fixed: cancelling a running hosted scan now stops it (it previously completed with partial
+  results and overwrote the cancelled status); worker shutdown no longer hangs on a running scan.
 - `HTTPTarget` can disable `${VAR}` expansion; the hosted app always does, so user-controlled
   URLs/headers cannot read server environment variables.
 - API keys in `LLMConfig`/`JudgeConfig` are `SecretStr` fields excluded from serialization.

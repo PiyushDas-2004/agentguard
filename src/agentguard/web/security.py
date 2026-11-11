@@ -4,11 +4,16 @@ from __future__ import annotations
 
 import hashlib
 import hmac
+import ipaddress
+import json
 import re
 import secrets
+import threading
 import time
 from collections import defaultdict, deque
 from collections.abc import Awaitable, Callable
+from concurrent.futures import ThreadPoolExecutor
+from typing import Any
 
 from argon2 import PasswordHasher
 from argon2.exceptions import InvalidHashError, VerificationError, VerifyMismatchError
@@ -17,6 +22,7 @@ from starlette.requests import Request
 from starlette.responses import Response
 
 __all__ = [
+    "BodySizeLimitMiddleware",
     "RateLimiter",
     "SecurityHeadersMiddleware",
     "client_ip",
@@ -25,6 +31,7 @@ __all__ = [
     "hash_token",
     "new_token",
     "password_problem",
+    "rate_key",
     "redact",
     "verify_password",
 ]
@@ -49,17 +56,27 @@ _COMMON = frozenset(
 )
 
 
+# Each argon2 operation allocates ~19 MiB. Running them on a small dedicated pool bounds both
+# concurrency and resident memory: glibc keeps freed buffers in per-thread arenas, so hashing on
+# the (40-thread) request pool would retain ~19 MiB in every request thread after a login flood.
+_HASH_POOL = ThreadPoolExecutor(max_workers=4, thread_name_prefix="argon2")
+
+
 def hash_password(password: str) -> str:
     """argon2id hash of ``password``."""
-    return _HASHER.hash(password)
+    return _HASH_POOL.submit(_HASHER.hash, password).result()
 
 
-def verify_password(password_hash: str | None, password: str) -> bool:
-    """Constant-effort verification (a dummy hash is checked when the user does not exist)."""
+def _verify(password_hash: str | None, password: str) -> bool:
     try:
         return _HASHER.verify(password_hash or _DUMMY_HASH, password) and password_hash is not None
     except (VerifyMismatchError, VerificationError, InvalidHashError):
         return False
+
+
+def verify_password(password_hash: str | None, password: str) -> bool:
+    """Constant-effort verification (a dummy hash is checked when the user does not exist)."""
+    return _HASH_POOL.submit(_verify, password_hash, password).result()
 
 
 def password_problem(password: str, email: str) -> str | None:
@@ -106,15 +123,33 @@ def client_ip(request: Request, trusted_hops: int) -> str:
     return peer
 
 
+def rate_key(ip: str) -> str:
+    """Rate-limit bucket for an address: IPv6 clients are grouped by /64 (one subscriber's prefix)."""
+    try:
+        address = ipaddress.ip_address(ip)
+    except ValueError:
+        return ip[:64]
+    if isinstance(address, ipaddress.IPv6Address):
+        if address.ipv4_mapped is not None:
+            return str(address.ipv4_mapped)
+        return str(ipaddress.IPv6Network(f"{address}/64", strict=False))
+    return str(address)
+
+
 class RateLimiter:
     """In-memory sliding-window limiter (per process; see docs/DEPLOYMENT.md for scaling)."""
 
     def __init__(self, clock: Callable[[], float] = time.monotonic) -> None:
         self._clock = clock
         self._hits: dict[str, deque[float]] = defaultdict(deque)
+        self._lock = threading.Lock()  # sync routes run on a thread pool
 
     def allow(self, key: str, limit: int, window_seconds: float) -> bool:
         """Record a hit for ``key``; False if it exceeds ``limit`` within the window."""
+        with self._lock:
+            return self._allow(key, limit, window_seconds)
+
+    def _allow(self, key: str, limit: int, window_seconds: float) -> bool:
         now = self._clock()
         hits = self._hits[key]
         while hits and now - hits[0] > window_seconds:
@@ -129,7 +164,8 @@ class RateLimiter:
 
     def reset(self, key: str) -> None:
         """Forget ``key`` (e.g. after a successful login)."""
-        self._hits.pop(key, None)
+        with self._lock:
+            self._hits.pop(key, None)
 
 
 _SECRETISH = [
@@ -143,7 +179,9 @@ def redact(text: str, *secrets_: str | None) -> str:
     """Remove known secrets and secret-looking tokens from user-visible/logged text."""
     for secret in secrets_:
         if secret and len(secret) >= 4:
-            text = text.replace(secret, "[REDACTED]")
+            # also the JSON-escaped form, since stored results are redacted after serialization
+            for form in dict.fromkeys((secret, json.dumps(secret)[1:-1], json.dumps(secret, ensure_ascii=False)[1:-1])):
+                text = text.replace(form, "[REDACTED]")
     for pattern in _SECRETISH:
         text = pattern.sub(lambda m: (m.group(1) if m.lastindex else "") + "[REDACTED]", text)
     return text
@@ -190,3 +228,75 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         if self.hsts:
             headers["Strict-Transport-Security"] = "max-age=63072000; includeSubDomains"
         return response
+
+
+class BodySizeLimitMiddleware:
+    """Pure ASGI middleware rejecting request bodies larger than ``max_bytes`` with 413.
+
+    ``Content-Length`` is checked up front; streamed (chunked) bodies are counted as they arrive.
+    Once the limit is crossed the body stream is ended (an ``http.disconnect`` is delivered, so
+    nothing more is buffered) and whatever the application then responds is replaced by a 413.
+    Raising from ``receive`` is avoided on purpose: Starlette's middleware wraps it in an
+    exception group, which turns it into a generic error.
+    """
+
+    def __init__(self, app: Any, *, max_bytes: int) -> None:
+        self.app = app
+        self.max_bytes = max_bytes
+
+    async def __call__(self, scope: dict[str, Any], receive: Any, send: Any) -> None:
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+        for name, value in scope.get("headers", []):
+            if name == b"content-length":
+                try:
+                    declared = int(value)
+                except ValueError:
+                    declared = self.max_bytes + 1
+                if declared > self.max_bytes:
+                    await _reject_too_large(send)
+                    return
+        received = 0
+        exceeded = False
+        rejected = False
+
+        async def limited_receive() -> dict[str, Any]:
+            nonlocal received, exceeded
+            if exceeded:
+                return {"type": "http.disconnect"}
+            message: dict[str, Any] = await receive()
+            if message["type"] == "http.request":
+                received += len(message.get("body", b""))
+                if received > self.max_bytes:
+                    exceeded = True
+                    return {"type": "http.disconnect"}
+            return message
+
+        async def guarded_send(message: dict[str, Any]) -> None:
+            nonlocal rejected
+            if not exceeded:
+                await send(message)
+            elif not rejected:
+                rejected = True
+                await _reject_too_large(send)
+
+        try:
+            await self.app(scope, limited_receive, guarded_send)
+        except Exception:
+            if not exceeded:
+                raise
+        if exceeded and not rejected:
+            await _reject_too_large(send)
+
+
+async def _reject_too_large(send: Any) -> None:
+    body = b"Request body too large"
+    await send(
+        {
+            "type": "http.response.start",
+            "status": 413,
+            "headers": [(b"content-type", b"text/plain; charset=utf-8"), (b"content-length", str(len(body)).encode())],
+        }
+    )
+    await send({"type": "http.response.body", "body": body})

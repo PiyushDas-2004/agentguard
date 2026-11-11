@@ -47,6 +47,7 @@ __all__ = [
 
 MAX_URL_LENGTH = 2048
 DEFAULT_MAX_RESPONSE_BYTES = 2 * 1024 * 1024
+_SITE_LOCAL_V6 = ipaddress.IPv6Network("fec0::/10")
 
 
 class UnsafeURLError(ValueError):
@@ -70,6 +71,8 @@ def ip_is_public(address: str) -> bool:
         if ip.teredo is not None:
             return all(ip_is_public(str(part)) for part in ip.teredo)
     if not ip.is_global:
+        return False
+    if isinstance(ip, ipaddress.IPv6Address) and ip in _SITE_LOCAL_V6:  # deprecated fec0::/10
         return False
     return not (ip.is_multicast or ip.is_reserved or ip.is_loopback or ip.is_link_local or ip.is_unspecified)
 
@@ -238,7 +241,15 @@ class SafeTransport(httpx.AsyncHTTPTransport):
             check_url(str(request.url), self.policy)
         except UnsafeURLError as exc:
             raise BlockedAddressError(str(exc), request=request) from exc
+        # The size cap counts wire bytes, so compressed bodies (zip bombs) are refused outright.
+        request.headers["Accept-Encoding"] = "identity"
         response = await super().handle_async_request(request)
+        encoding = response.headers.get("content-encoding", "").strip().lower()
+        if encoding not in {"", "identity"}:
+            await response.aclose()
+            raise httpx.RemoteProtocolError(
+                f"compressed responses ({encoding}) are not accepted; serve identity encoding", request=request
+            )
         stream = typing.cast(httpx.AsyncByteStream, response.stream)
         response.stream = _LimitedStream(stream, self.policy.max_response_bytes)
         return response

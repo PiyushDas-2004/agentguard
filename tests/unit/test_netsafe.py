@@ -41,6 +41,7 @@ STRICT = NetPolicy()
         "2002:7f00:1::",
         "64:ff9b::7f00:1",
         "fd00:ec2::254",
+        "fec0::1",
         "not-an-ip",
     ],
 )
@@ -151,3 +152,29 @@ async def test_redirects_are_not_followed_and_body_is_capped() -> None:
     finally:
         server.close()
         await server.wait_closed()
+
+
+async def test_compressed_responses_are_refused() -> None:
+    """The size cap counts wire bytes, so a gzip bomb must never be decoded."""
+    import asyncio
+    import gzip
+
+    bomb = gzip.compress(b"\0" * 5_000_000)
+    seen: list[bytes] = []
+
+    async def handler(reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
+        seen.append(await reader.readuntil(b"\r\n\r\n"))
+        writer.write(b"HTTP/1.1 200 OK\r\nContent-Encoding: gzip\r\nContent-Length: %d\r\n\r\n" % len(bomb) + bomb)
+        await writer.drain()
+        writer.close()
+
+    server = await asyncio.start_server(handler, "127.0.0.1", 0)
+    port = server.sockets[0].getsockname()[1]
+    try:
+        async with safe_client(NetPolicy(allow_http=True, allow_private=True), timeout=5) as client:
+            with pytest.raises(httpx.RemoteProtocolError, match="compressed"):
+                await client.get(f"http://127.0.0.1:{port}/")
+    finally:
+        server.close()
+        await server.wait_closed()
+    assert b"accept-encoding: identity" in seen[0].lower()

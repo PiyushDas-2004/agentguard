@@ -36,6 +36,7 @@ class WebSettings(BaseModel):
     target_requests_per_second: float = Field(default=2.0, gt=0, le=50)
     request_timeout_seconds: float = Field(default=30.0, gt=0, le=120)
     retention_days: int = Field(default=30, ge=1, le=3650)
+    max_scan_minutes: int = Field(default=30, ge=1, le=24 * 60)
     trusted_proxy_hops: int = Field(default=1, ge=0, le=5)
 
     @property
@@ -84,6 +85,7 @@ _ENV = {
     "max_trials": "AGENTGUARD_MAX_TRIALS",
     "target_requests_per_second": "AGENTGUARD_TARGET_RPS",
     "retention_days": "AGENTGUARD_RETENTION_DAYS",
+    "max_scan_minutes": "AGENTGUARD_MAX_SCAN_MINUTES",
     "trusted_proxy_hops": "AGENTGUARD_TRUSTED_PROXY_HOPS",
 }
 

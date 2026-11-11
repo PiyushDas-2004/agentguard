@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import json
+
 import pytest
 from starlette.requests import Request
 
@@ -9,6 +11,7 @@ from agentguard.core.errors import ConfigError
 from agentguard.web.jobs import validate_hosted_template
 from agentguard.web.scans import REQUEST_PRESETS
 from agentguard.web.security import (
+    BodySizeLimitMiddleware,
     RateLimiter,
     client_ip,
     constant_time_equals,
@@ -16,6 +19,7 @@ from agentguard.web.security import (
     hash_token,
     new_token,
     password_problem,
+    rate_key,
     redact,
     verify_password,
 )
@@ -158,3 +162,49 @@ def test_load_settings_from_environment() -> None:
     assert settings.max_trials == 2
     with pytest.raises(ConfigError, match="insecure or invalid"):
         load_settings({"AGENTGUARD_ENV": "production"})
+
+
+def test_redaction_covers_json_escaped_secrets() -> None:
+    secret = 'pa"ss\\word-123'
+    serialized = json.dumps({"echo": f"you sent {secret}"})
+    assert secret not in redact(serialized, secret)
+    assert json.dumps(secret)[1:-1] not in redact(serialized, secret)
+
+
+def test_rate_keys_group_ipv6_by_prefix() -> None:
+    assert rate_key("2001:db8:1:2:aaaa::1") == rate_key("2001:db8:1:2:bbbb::9") == "2001:db8:1:2::/64"
+    assert rate_key("2001:db8:1:3::1") != rate_key("2001:db8:1:2::1")
+    assert rate_key("203.0.113.9") == "203.0.113.9"
+    assert rate_key("::ffff:203.0.113.9") == "203.0.113.9"
+
+
+async def _call(app: BodySizeLimitMiddleware, chunks: list[bytes], declared: int | None) -> int:
+    headers = [(b"content-length", str(declared).encode())] if declared is not None else []
+    scope = {"type": "http", "method": "POST", "path": "/", "headers": headers}
+    queue = [{"type": "http.request", "body": c, "more_body": i < len(chunks) - 1} for i, c in enumerate(chunks)]
+    statuses: list[int] = []
+
+    async def receive() -> dict[str, object]:
+        return queue.pop(0)
+
+    async def send(message: dict[str, object]) -> None:
+        if message["type"] == "http.response.start":
+            statuses.append(int(message["status"]))  # type: ignore[call-overload]
+
+    await app(scope, receive, send)
+    return statuses[0]
+
+
+async def test_body_size_limit_rejects_declared_and_streamed_bodies() -> None:
+    async def inner(scope: dict[str, object], receive: object, send: object) -> None:
+        while True:
+            message = await receive()  # type: ignore[operator]
+            if not message.get("more_body"):
+                break
+        await send({"type": "http.response.start", "status": 200, "headers": []})  # type: ignore[operator]
+        await send({"type": "http.response.body", "body": b"ok"})  # type: ignore[operator]
+
+    app = BodySizeLimitMiddleware(inner, max_bytes=1000)
+    assert await _call(app, [b"x" * 10], 10) == 200
+    assert await _call(app, [b"x" * 10], 5000) == 413  # declared too large: refused before reading
+    assert await _call(app, [b"x" * 600, b"x" * 600], None) == 413  # chunked/streamed past the limit

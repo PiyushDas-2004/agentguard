@@ -51,6 +51,8 @@ class Agent:
                     self._send(404, b"{}")
 
             def do_POST(self) -> None:
+                if self.path.startswith("/slow"):
+                    time.sleep(1.0)
                 data = json.loads(self.rfile.read(int(self.headers.get("Content-Length", 0))) or b"{}")
                 agent.requests.append({"path": self.path, "headers": dict(self.headers), "body": data})
                 message = str(data.get("message", ""))
@@ -207,23 +209,49 @@ def test_signup_rules(client: TestClient) -> None:
         assert PASSWORD not in user.password_hash
 
 
-def test_login_is_generic_and_locks_out(client: TestClient) -> None:
+def test_login_is_generic_and_throttled_per_client(client: TestClient) -> None:
     signup(client)
     client.cookies.clear()
     token = csrf_of(client.get("/login").text)
-    unknown = client.post("/login", data={"email": "nobody@example.com", "password": PASSWORD, "csrf_token": token})
-    wrong = client.post(
-        "/login", data={"email": "alice@example.com", "password": "nope-nope-nope", "csrf_token": token}
+    attacker = {"X-Forwarded-For": "198.51.100.7"}
+    unknown = client.post(
+        "/login", data={"email": "nobody@example.com", "password": PASSWORD, "csrf_token": token}, headers=attacker
     )
-    assert unknown.status_code == wrong.status_code == 400
+    wrong = {"email": "alice@example.com", "password": "nope-nope-nope", "csrf_token": token}
+    first = client.post("/login", data=wrong, headers=attacker)
+    assert unknown.status_code == first.status_code == 400
     assert "Invalid e-mail or password." in unknown.text
-    assert "Invalid e-mail or password." in wrong.text
-    for _ in range(9):
-        client.post("/login", data={"email": "alice@example.com", "password": "nope-nope-nope", "csrf_token": token})
-    # 10 failures -> locked: even the correct password is refused now
-    locked = client.post("/login", data={"email": "alice@example.com", "password": PASSWORD, "csrf_token": token})
-    assert locked.status_code in {400, 429}
-    assert "ag_session" not in locked.headers.get("set-cookie", "")
+    assert "Invalid e-mail or password." in first.text
+    statuses = [client.post("/login", data=wrong, headers=attacker).status_code for _ in range(5)]
+    assert statuses[-1] == 429  # the attacker's client is throttled for this account ...
+    # ... but the owner, from another address, can still sign in (no account lock-out DoS)
+    owner = client.post(
+        "/login",
+        data={"email": "alice@example.com", "password": PASSWORD, "csrf_token": token},
+        headers={"X-Forwarded-For": "203.0.113.20"},
+        follow_redirects=False,
+    )
+    assert owner.status_code == 303
+
+
+def test_oversized_request_bodies_are_rejected_before_parsing(client: TestClient) -> None:
+    form = {"Content-Type": "application/x-www-form-urlencoded"}
+    declared = client.post("/login", content=b"email=" + b"a" * 200_000, headers=form)
+    assert declared.status_code == 413
+
+    def chunks() -> Iterator[bytes]:  # no Content-Length: counted while streaming
+        for _ in range(100):
+            yield b"a" * 10_000
+
+    streamed = client.post("/login", content=chunks(), headers=form)
+    assert streamed.status_code == 413
+
+
+def test_unknown_routes_render_the_error_page(client: TestClient) -> None:
+    response = client.get("/no-such-page")
+    assert response.status_code == 404
+    assert "Not found" in response.text
+    assert "content-security-policy" in response.headers
 
 
 def test_session_cookie_flags_and_logout(client: TestClient) -> None:
@@ -432,3 +460,94 @@ def test_account_deletion_removes_everything(client: TestClient, agent: Agent) -
     with Session(client.app.state.engine) as session:  # type: ignore[attr-defined]
         assert session.exec(select(User)).all() == []
         assert session.exec(select(Target)).all() == []
+
+
+def test_deleting_scans_does_not_refund_the_daily_quota(agent: Agent) -> None:
+    with TestClient(create_web_app(_settings(scans_per_user_per_day=1))) as client:
+        csrf = signup(client)
+        target_id = add_target(client, csrf, agent.url)
+        verify(client, csrf, agent, target_id)
+        data = {"target_id": target_id, "categories": ["DENIAL_OF_WALLET"], "csrf_token": csrf}
+        first = client.post("/scans", data=data, follow_redirects=False)
+        assert first.status_code == 303
+        scan_id = first.headers["location"].rsplit("/", 1)[1]
+        client.post(f"/scans/{scan_id}/cancel", data={"csrf_token": csrf})
+        client.post(f"/scans/{scan_id}/delete", data={"csrf_token": csrf})
+        again = client.post("/scans", data=data)
+        assert again.status_code == 429
+        assert "quota" in again.text
+
+
+def test_scans_have_a_total_time_limit(agent: Agent) -> None:
+    settings = _settings().model_copy(update={"max_scan_minutes": 0.02})  # 1.2 s
+    with TestClient(create_web_app(settings)) as client:
+        csrf = signup(client)
+        target_id = add_target(client, csrf, agent.url.replace("/chat", "/slow"))
+        verify(client, csrf, agent, target_id)
+        response = client.post(
+            "/scans",
+            data={"target_id": target_id, "categories": ["PI_DIRECT"], "csrf_token": csrf},
+            follow_redirects=False,
+        )
+        scan = wait_for(client, response.headers["location"].rsplit("/", 1)[1], timeout=30)
+        assert scan.status == "failed"
+        assert "limit" in (scan.error or "")
+
+
+def test_stored_results_are_bounded(client: TestClient, agent: Agent, monkeypatch: pytest.MonkeyPatch) -> None:
+    from agentguard.core.types import RunResult
+    from agentguard.web import jobs
+
+    csrf = signup(client)
+    target_id = add_target(client, csrf, agent.url)
+    verify(client, csrf, agent, target_id)
+    response = client.post(
+        "/scans",
+        data={"target_id": target_id, "categories": ["SYS_PROMPT_LEAK"], "csrf_token": csrf},
+        follow_redirects=False,
+    )
+    scan = wait_for(client, response.headers["location"].rsplit("/", 1)[1])
+    assert scan.result_json is not None
+    result = RunResult.model_validate_json(scan.result_json)
+    assert any(c.samples for c in result.cases)
+    without_samples = result.model_copy(update={"cases": [c.model_copy(update={"samples": []}) for c in result.cases]})
+    monkeypatch.setattr(jobs, "MAX_RESULT_CHARS", len(without_samples.model_dump_json()) + 500)
+    trimmed = RunResult.model_validate_json(jobs.bounded_result_json(result, []))
+    assert len(trimmed.model_dump_json()) <= jobs.MAX_RESULT_CHARS
+    assert any("omitted" in w for w in trimmed.warnings)
+    assert [c.n_violations for c in trimmed.cases] == [c.n_violations for c in result.cases]  # aggregates kept
+    monkeypatch.setattr(jobs, "MAX_RESULT_CHARS", 100)
+    with pytest.raises(ValueError, match="too large"):
+        jobs.bounded_result_json(result, [])
+
+
+def test_cancelling_a_running_scan_stops_it(client: TestClient, agent: Agent) -> None:
+    csrf = signup(client)
+    target_id = add_target(client, csrf, agent.url.replace("/chat", "/slow"))
+    verify(client, csrf, agent, target_id)
+    response = client.post(
+        "/scans",
+        data={
+            "target_id": target_id,
+            "categories": ["PI_DIRECT"],
+            "auth_header_value": AGENT_SECRET,
+            "csrf_token": csrf,
+        },
+        follow_redirects=False,
+    )
+    scan_id = response.headers["location"].rsplit("/", 1)[1]
+    deadline = time.monotonic() + 10
+    while time.monotonic() < deadline:
+        with Session(client.app.state.engine) as session:  # type: ignore[attr-defined]
+            stored = session.get(Scan, scan_id)
+            if stored is not None and stored.status == "running":
+                break
+        time.sleep(0.05)
+    client.post(f"/scans/{scan_id}/cancel", data={"csrf_token": csrf})
+    time.sleep(1.5)  # a swallowed cancellation would let the scan "complete" and overwrite the status
+    with Session(client.app.state.engine) as session:  # type: ignore[attr-defined]
+        stored = session.get(Scan, scan_id)
+        assert stored is not None
+        assert stored.status == "cancelled"
+        assert stored.result_json is None
+    assert not client.app.state.manager.holds_secret_for(scan_id)  # type: ignore[attr-defined]

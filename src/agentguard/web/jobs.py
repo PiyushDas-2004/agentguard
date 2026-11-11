@@ -11,7 +11,6 @@ would require an external queue with an encrypted secret hand-off; see docs/DEPL
 from __future__ import annotations
 
 import asyncio
-import contextlib
 import json
 import logging
 import re
@@ -22,8 +21,8 @@ from typing import Any
 from sqlalchemy import Engine
 from sqlmodel import Session, col, select
 
-from agentguard.core.types import AttackCategory, utcnow
-from agentguard.web.models import AuditEvent, Scan, Target
+from agentguard.core.types import AttackCategory, CaseStatus, RunResult, utcnow
+from agentguard.web.models import AuditEvent, Scan, Target, UserSession
 from agentguard.web.scans import ScanRequest, ScanSecrets, run_hosted_scan
 from agentguard.web.security import redact
 from agentguard.web.settings import WebSettings
@@ -31,6 +30,9 @@ from agentguard.web.settings import WebSettings
 __all__ = ["ScanManager", "validate_hosted_template"]
 
 logger = logging.getLogger("agentguard.web.jobs")
+
+MAX_RESULT_CHARS = 5_000_000  # stored result JSON per scan (bounds DB size and page-render memory)
+MAINTENANCE_INTERVAL_SECONDS = 3600
 
 _EXPR = re.compile(
     r"^\s*(message|messages|system_prompt|session|case_id)(\[\s*-?\d{0,3}\s*(:\s*-?\d{0,3}\s*)?\])?"
@@ -85,19 +87,33 @@ class ScanManager:
             return len(stale)
 
     def purge_expired(self) -> int:
-        """Delete scans older than the retention period; returns the count."""
-        cutoff = utcnow() - timedelta(days=self.settings.retention_days)
+        """Delete scans and audit events past retention, and expired sessions; returns scans deleted."""
+        now = utcnow()
+        cutoff = now - timedelta(days=self.settings.retention_days)
         with Session(self.engine) as session:
             old = session.exec(select(Scan).where(col(Scan.created_at) < cutoff)).all()
             for scan in old:
                 session.delete(scan)
+            for event in session.exec(select(AuditEvent).where(col(AuditEvent.created_at) < cutoff)).all():
+                session.delete(event)
+            for row in session.exec(select(UserSession).where(col(UserSession.expires_at) < now)).all():
+                session.delete(row)
             session.commit()
             return len(old)
 
     def start(self) -> None:
-        """Start the worker tasks."""
+        """Start the worker tasks and the periodic maintenance task."""
         for index in range(self.settings.max_concurrent_scans):
             self._workers.append(asyncio.create_task(self._worker(), name=f"scan-worker-{index}"))
+        self._workers.append(asyncio.create_task(self._maintenance(), name="maintenance"))
+
+    async def _maintenance(self) -> None:
+        while True:
+            await asyncio.sleep(MAINTENANCE_INTERVAL_SECONDS)
+            try:
+                await asyncio.to_thread(self.purge_expired)
+            except Exception:  # keep the loop alive; the next run retries
+                logger.exception("retention purge failed")
 
     async def stop(self) -> None:
         """Cancel workers and running scans; wipe secrets."""
@@ -134,17 +150,18 @@ class ScanManager:
             try:
                 task = asyncio.create_task(self._run(scan_id))
                 self._tasks[scan_id] = task
-                with contextlib.suppress(asyncio.CancelledError):
-                    await task
+                # asyncio.wait does not propagate the scan task's cancellation (user cancel) but
+                # does propagate this worker's own cancellation (shutdown).
+                await asyncio.wait({task})
             finally:
                 self._tasks.pop(scan_id, None)
                 self._secrets.pop(scan_id, None)
                 self.queue.task_done()
 
-    def _update(self, scan_id: str, **fields: Any) -> None:
+    def _update(self, scan_id: str, *, only_if_status: str | None = None, **fields: Any) -> None:
         with Session(self.engine) as session:
             scan = session.get(Scan, scan_id)
-            if scan is None:
+            if scan is None or (only_if_status is not None and scan.status != only_if_status):
                 return
             for key, value in fields.items():
                 setattr(scan, key, value)
@@ -179,20 +196,38 @@ class ScanManager:
                 last = now
                 self._update(scan_id, progress_done=done, progress_total=total)
 
+        # The CLI scheduler turns outside cancellation into a partial result, so cancellation and
+        # the time limit are enforced here, around the scan task, rather than by wait_for().
+        scan_task = asyncio.create_task(run_hosted_scan(target, request, secrets, self.settings, progress=progress))
         try:
-            result = await run_hosted_scan(target, request, secrets, self.settings, progress=progress)
+            done, _ = await asyncio.wait({scan_task}, timeout=self.settings.max_scan_minutes * 60)
         except asyncio.CancelledError:
+            await _stop(scan_task)
             self._update(scan_id, status="cancelled", finished_at=utcnow(), error="Cancelled by the user.")
             raise
-        except Exception as exc:
+        if not done:
+            await _stop(scan_task)
+            message = f"The scan exceeded the {self.settings.max_scan_minutes:g}-minute limit and was stopped."
+            self._update(scan_id, status="failed", finished_at=utcnow(), error=message)
+            self._audit(user_id, "scan_timeout", scan_id)
+            return
+        try:
+            result = scan_task.result()
+        except (Exception, asyncio.CancelledError) as exc:
             message = redact(f"{type(exc).__name__}: {exc}", *secrets.values())[:900]
             logger.warning("scan %s failed: %s", scan_id, message)
             self._update(scan_id, status="failed", finished_at=utcnow(), error=message)
             self._audit(user_id, "scan_failed", scan_id)
             return
-        payload = redact(result.model_dump_json(), *secrets.values())
+        try:
+            payload = bounded_result_json(result, secrets.values())
+        except ValueError as exc:
+            self._update(scan_id, status="failed", finished_at=utcnow(), error=str(exc))
+            self._audit(user_id, "scan_failed", f"{scan_id} result too large")
+            return
         self._update(
             scan_id,
+            only_if_status="running",
             status="completed",
             finished_at=utcnow(),
             risk_score=result.risk_score,
@@ -206,6 +241,36 @@ class ScanManager:
         with Session(self.engine) as session:
             session.add(AuditEvent(user_id=user_id, event=event, detail=detail[:500]))
             session.commit()
+
+
+async def _stop(task: asyncio.Task[Any]) -> None:
+    """Cancel ``task`` and wait until it has finished (its partial result is discarded)."""
+    task.cancel()
+    await asyncio.gather(task, return_exceptions=True)
+
+
+def bounded_result_json(result: RunResult, secrets: list[str]) -> str:
+    """Serialize ``result`` with secrets redacted, shrinking embedded transcripts to fit the cap.
+
+    Transcripts are dropped first for passing cases, then for all cases; aggregates are kept.
+
+    Raises:
+        ValueError: the result is too large even without transcripts.
+    """
+    payload = redact(result.model_dump_json(), *secrets)
+    if len(payload) <= MAX_RESULT_CHARS:
+        return payload
+    for keep_failed in (True, False):
+        cases = [
+            c.model_copy(update={"samples": c.samples if keep_failed and c.status == CaseStatus.failed else []})
+            for c in result.cases
+        ]
+        note = "Some transcripts were omitted because the agent's responses were very large."
+        trimmed = result.model_copy(update={"cases": cases, "warnings": [*result.warnings, note]})
+        payload = redact(trimmed.model_dump_json(), *secrets)
+        if len(payload) <= MAX_RESULT_CHARS:
+            return payload
+    raise ValueError("The scan result was too large to store. Reduce the size of your agent's responses.")
 
 
 def result_summary(result_json: str | None) -> dict[str, Any]:

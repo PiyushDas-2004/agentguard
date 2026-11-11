@@ -42,7 +42,8 @@ and free Postgres databases expire after 30 days unless upgraded. Upgrade both f
 | `AGENTGUARD_SCANS_PER_USER_PER_DAY` | `20` | per-user quota |
 | `AGENTGUARD_MAX_TRIALS` | `3` | max trials per case |
 | `AGENTGUARD_TARGET_RPS` | `2` | requests per second sent to a target |
-| `AGENTGUARD_RETENTION_DAYS` | `30` | scans older than this are deleted |
+| `AGENTGUARD_RETENTION_DAYS` | `30` | scans and audit events older than this are deleted (hourly) |
+| `AGENTGUARD_MAX_SCAN_MINUTES` | `30` | total time limit per scan |
 | `AGENTGUARD_SESSION_HOURS` | `12` | session lifetime |
 
 The security design is described in [HOSTED_SECURITY.md](HOSTED_SECURITY.md). Run one instance

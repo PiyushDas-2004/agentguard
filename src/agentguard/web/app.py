@@ -10,6 +10,7 @@ reports that render agent output.
 """
 
 import contextlib
+import hashlib
 import logging
 import re
 import uuid
@@ -24,6 +25,7 @@ from jinja2 import Environment, PackageLoader, select_autoescape
 from jsonpath_ng.parser import parse as jsonpath_parse
 from sqlalchemy import Engine, text
 from sqlmodel import Session, SQLModel, col, create_engine, func, select
+from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from agentguard.core.types import RunResult, utcnow
 from agentguard.harness.canary import make_canary
@@ -34,6 +36,7 @@ from agentguard.web.jobs import ScanManager, validate_hosted_template
 from agentguard.web.models import AuditEvent, Scan, Target, User, UserSession
 from agentguard.web.scans import HOSTED_CATEGORIES, REQUEST_PRESETS, ScanSecrets
 from agentguard.web.security import (
+    BodySizeLimitMiddleware,
     RateLimiter,
     SecurityHeadersMiddleware,
     client_ip,
@@ -42,6 +45,7 @@ from agentguard.web.security import (
     hash_token,
     new_token,
     password_problem,
+    rate_key,
     verify_password,
 )
 from agentguard.web.settings import WebSettings, load_settings
@@ -55,8 +59,9 @@ EMAIL_RE = re.compile(r"^[A-Za-z0-9._%+\-]{1,64}@[A-Za-z0-9.\-]{1,190}\.[A-Za-z]
 HEADER_NAME_RE = re.compile(r"^[A-Za-z0-9\-]{1,64}$")
 FORBIDDEN_HEADERS = {"host", "content-length", "transfer-encoding", "connection", "cookie", "content-type"}
 MAX_TARGETS_PER_USER = 20
-LOCKOUT_THRESHOLD = 10
-LOCKOUT_MINUTES = 15
+LOGIN_PAIR_LIMIT = 5  # attempts per (account, client) per 15 minutes
+LOGIN_GLOBAL_PER_MINUTE = 600  # all sign-ins; with the argon2 concurrency cap this bounds CPU/memory
+MAX_BODY_BYTES = 64 * 1024
 
 
 def _engine(settings: WebSettings) -> Engine:
@@ -102,6 +107,7 @@ def create_web_app(settings: WebSettings | None = None) -> FastAPI:
         title="AgentGuard", version=__version__, docs_url=None, redoc_url=None, openapi_url=None, lifespan=lifespan
     )
     app.add_middleware(SecurityHeadersMiddleware, hsts=settings.production)
+    app.add_middleware(BodySizeLimitMiddleware, max_bytes=MAX_BODY_BYTES)  # outermost: runs first
     app.state.manager = manager
     app.state.settings = settings
     app.state.engine = engine
@@ -112,7 +118,7 @@ def create_web_app(settings: WebSettings | None = None) -> FastAPI:
         return Session(engine)
 
     def ip_of(request: Request) -> str:
-        return client_ip(request, settings.trusted_proxy_hops)
+        return rate_key(client_ip(request, settings.trusted_proxy_hops))
 
     def audit(user_id: int | None, event: str, request: Request, detail: str = "") -> None:
         with db() as session:
@@ -236,12 +242,18 @@ def create_web_app(settings: WebSettings | None = None) -> FastAPI:
         return NetPolicy(allow_http=settings.allow_http_targets, allow_private=settings.allow_private_targets)
 
     # ------------------------------------------------------------------ errors
-    @app.exception_handler(HTTPException)
-    async def http_error(request: Request, exc: HTTPException) -> Response:
+    @app.exception_handler(StarletteHTTPException)
+    async def http_error(request: Request, exc: StarletteHTTPException) -> Response:
         if exc.status_code in (301, 302, 303, 307) and exc.headers:
             return RedirectResponse(exc.headers["Location"], status_code=303)
-        message = {403: "Forbidden", 404: "Not found", 429: "Too many requests"}.get(exc.status_code, "Error")
-        detail = exc.detail if exc.status_code in (400, 403, 409, 429) and isinstance(exc.detail, str) else ""
+        message = {
+            403: "Forbidden",
+            404: "Not found",
+            405: "Method not allowed",
+            413: "Request too large",
+            429: "Too many requests",
+        }.get(exc.status_code, "Error")
+        detail = exc.detail if exc.status_code in (400, 403, 409, 413, 429) and isinstance(exc.detail, str) else ""
         return render(request, "error.html.j2", status_code=exc.status_code, title=message, detail=detail)
 
     @app.exception_handler(Exception)
@@ -264,7 +276,7 @@ def create_web_app(settings: WebSettings | None = None) -> FastAPI:
     def readyz() -> JSONResponse:
         with db() as session:
             session.exec(text("SELECT 1"))  # type: ignore[call-overload]
-        return JSONResponse({"status": "ready", "queued": manager.queue.qsize()})
+        return JSONResponse({"status": "ready"})
 
     @app.get("/static/htmx.min.js")
     def htmx() -> Response:
@@ -335,24 +347,22 @@ def create_web_app(settings: WebSettings | None = None) -> FastAPI:
         check_csrf(request, csrf_token, request.cookies.get(csrf_cookie))
         ip = ip_of(request)
         email = email.strip().lower()
-        if not limiter.allow(f"login-ip:{ip}", 20, 900) or not limiter.allow(f"login-email:{email}", 10, 900):
-            audit(None, "login_throttled", request, email)
+        # Throttling is per client and per (account, client), never per account alone, so an
+        # attacker who knows an e-mail address cannot lock its owner out. No audit row is written
+        # for throttled attempts (unauthenticated callers must not be able to grow the database).
+        email_key = hashlib.sha256(email.encode("utf-8")).hexdigest()[:32]
+        if (
+            not limiter.allow("login-global", LOGIN_GLOBAL_PER_MINUTE, 60)
+            or not limiter.allow(f"login-ip:{ip}", 20, 900)
+            or not limiter.allow(f"login-pair:{email_key}:{ip}", LOGIN_PAIR_LIMIT, 900)
+        ):
             raise HTTPException(status_code=429, detail="Too many sign-in attempts. Wait 15 minutes.")
         with db() as session:
             user = session.exec(select(User).where(User.email == email)).first()
             user_id = user.id if user is not None else None
-            locked = False
-            if user is not None and user.locked_until is not None:
-                until = (
-                    user.locked_until if user.locked_until.tzinfo else user.locked_until.replace(tzinfo=utcnow().tzinfo)
-                )
-                locked = until > utcnow()
-            ok = verify_password(user.password_hash if user else None, password) and not locked
+            ok = verify_password(user.password_hash if user else None, password)
             if user is not None and not ok:
                 user.failed_logins += 1
-                if user.failed_logins >= LOCKOUT_THRESHOLD:
-                    user.locked_until = utcnow() + timedelta(minutes=LOCKOUT_MINUTES)
-                    user.failed_logins = 0
                 session.add(user)
                 session.commit()
             if ok and user is not None:
@@ -363,9 +373,10 @@ def create_web_app(settings: WebSettings | None = None) -> FastAPI:
                 session.refresh(user)
                 session.expunge(user)
         if not ok or user is None:
-            audit(user_id, "login_failed", request, email)
+            if user_id is not None:  # unknown e-mails leave no row: unauthenticated callers cannot grow the table
+                audit(user_id, "login_failed", request)
             return render(request, "login.html.j2", status_code=400, error="Invalid e-mail or password.", email=email)
-        limiter.reset(f"login-email:{email}")
+        limiter.reset(f"login-pair:{email_key}:{ip}")
         audit(user.id, "login", request)
         response = RedirectResponse("/scans", status_code=303)
         start_session(user, request, response)
@@ -654,8 +665,14 @@ def create_web_app(settings: WebSettings | None = None) -> FastAPI:
             if any(ch in header_value for ch in "\r\n\x00"):
                 raise HTTPException(status_code=400, detail="Invalid authentication header value.")
             day_ago = utcnow() - timedelta(days=1)
-            recent = session.exec(
-                select(func.count()).select_from(Scan).where(Scan.user_id == user.id, col(Scan.created_at) >= day_ago)
+            recent = session.exec(  # counted from the audit log, so deleting scans does not refund quota
+                select(func.count())
+                .select_from(AuditEvent)
+                .where(
+                    AuditEvent.user_id == user.id,
+                    AuditEvent.event == "scan_created",
+                    col(AuditEvent.created_at) >= day_ago,
+                )
             ).one()
             if recent >= settings.scans_per_user_per_day:
                 raise HTTPException(status_code=429, detail="Daily scan quota reached.")

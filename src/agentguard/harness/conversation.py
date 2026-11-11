@@ -46,6 +46,8 @@ from agentguard.targets.base import BaseTarget, MeteredLLM, TargetContext, Targe
 
 __all__ = ["ConversationDriver", "TrialRun", "sanitize_text"]
 
+MAX_TOOL_CALLS_PER_TURN = 50  # agent-reported tool calls kept per turn (bounds memory/storage)
+
 DEFAULT_POISON_LOCATIONS: dict[InjectionVector, str] = {
     InjectionVector.file_content: "/sandbox/public/shared/document.txt",
     InjectionVector.web_page: "https://partner.example.com/update",
@@ -341,7 +343,9 @@ class ConversationDriver:
             transcript.metadata["original_output_chars"] = len(reply)
             reply = reply[: self.max_output_chars]
             run.output_truncated = True
-        for call in response.tool_calls:
+        if len(response.tool_calls) > MAX_TOOL_CALLS_PER_TURN:
+            transcript.metadata["dropped_tool_calls"] = len(response.tool_calls) - MAX_TOOL_CALLS_PER_TURN
+        for call in response.tool_calls[:MAX_TOOL_CALLS_PER_TURN]:
             run.sandbox.record_external(call.name, call.arguments, call.result_preview)
         run.retrieved_contexts.extend(response.retrieved_contexts)
         transcript.turns.append(
